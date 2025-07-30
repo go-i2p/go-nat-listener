@@ -26,7 +26,7 @@ func NewRenewalManager(mapper PortMapper, protocol string, internalPort, externa
 		protocol:     protocol,
 		internalPort: internalPort,
 		externalPort: externalPort,
-		done:         make(chan struct{}),
+		// done channel will be created when Start() is called
 	}
 }
 
@@ -40,6 +40,7 @@ func (r *RenewalManager) Start() {
 	}
 
 	r.started = true
+	r.done = make(chan struct{}) // Create new channel each time
 	r.ticker = time.NewTicker(renewalInterval)
 	go r.renewLoop()
 }
