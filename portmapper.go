@@ -3,30 +3,22 @@
 package nattraversal
 
 import (
-    "fmt"
-    "time"
+	"fmt"
 )
-
-// PortMapper defines the interface for NAT traversal protocols.
-type PortMapper interface {
-    MapPort(protocol string, internalPort int, duration time.Duration) (externalPort int, err error)
-    UnmapPort(protocol string, externalPort int) error
-    GetExternalIP() (string, error)
-}
 
 // NewPortMapper creates a port mapper, trying UPnP first, then NAT-PMP.
 func NewPortMapper() (PortMapper, error) {
-    // Try UPnP first
-    upnp, err := NewUPnPMapper()
-    if err == nil {
-        return upnp, nil
-    }
-    
-    // Fall back to NAT-PMP
-    natpmp, err := NewNATPMPMapper()
-    if err != nil {
-        return nil, fmt.Errorf("no NAT traversal available: UPnP failed, NAT-PMP failed: %w", err)
-    }
-    
-    return natpmp, nil
+	// Try UPnP first
+	upnp, err := NewUPnPMapper()
+	if err == nil {
+		return upnp, nil
+	}
+
+	// Fall back to NAT-PMP
+	natpmp, err := NewNATPMPMapper()
+	if err != nil {
+		return nil, fmt.Errorf("no NAT traversal available: UPnP failed, NAT-PMP failed: %w", err)
+	}
+
+	return natpmp, nil
 }
