@@ -107,15 +107,53 @@ func main() {
 }
 ```
 
+### With Context (Timeout/Cancellation)
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+    
+    "github.com/go-i2p/go-nat-listener"
+)
+
+func main() {
+    // Create a context with a 10-second timeout for NAT discovery
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    
+    // Create a NAT-traversing TCP listener with timeout
+    listener, err := nattraversal.ListenContext(ctx, 8080)
+    if err != nil {
+        log.Fatal("Failed to create listener:", err)
+    }
+    defer listener.Close()
+    
+    fmt.Printf("Listening on external port: %d\n", listener.ExternalPort())
+    
+    // Accept connections normally...
+}
+```
+
 ## API Reference
 
 ### Core Functions
 
 #### `Listen(port int) (*NATListener, error)`
-Creates a TCP listener with NAT traversal on the specified port. Returns a `NATListener` that implements the standard `net.Listener` interface.
+Creates a TCP listener with NAT traversal on the specified port. Returns a `NATListener` that implements the standard `net.Listener` interface. This is a convenience wrapper around `ListenContext` using `context.Background()`.
+
+#### `ListenContext(ctx context.Context, port int) (*NATListener, error)`
+Creates a TCP listener with NAT traversal on the specified port, with context support for cancellation and timeouts. The context can be used to cancel the discovery and mapping operations. Once the listener is created, the context is no longer used - use `Close()` to stop the listener.
 
 #### `ListenPacket(port int) (*NATPacketListener, error)`
-Creates a UDP packet listener with NAT traversal on the specified port. Returns a `NATPacketListener` for UDP communication.
+Creates a UDP packet listener with NAT traversal on the specified port. Returns a `NATPacketListener` for UDP communication. This is a convenience wrapper around `ListenPacketContext` using `context.Background()`.
+
+#### `ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, error)`
+Creates a UDP packet listener with NAT traversal on the specified port, with context support for cancellation and timeouts. The context can be used to cancel the discovery and mapping operations. Once the listener is created, the context is no longer used - use `Close()` to stop the listener.
 
 ### Types
 
