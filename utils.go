@@ -2,6 +2,7 @@ package nattraversal
 
 import (
 	"bufio"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -12,8 +13,22 @@ import (
 // createTCPMapping establishes a TCP port mapping.
 // Moved from: listener.go
 func createTCPMapping(port int) (PortMapper, int, error) {
-	mapper, err := NewPortMapper()
+	return createTCPMappingContext(context.Background(), port)
+}
+
+// createTCPMappingContext establishes a TCP port mapping with context support.
+// The context is checked before and after the discovery and mapping operations.
+func createTCPMappingContext(ctx context.Context, port int) (PortMapper, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	mapper, err := NewPortMapperContext(ctx)
 	if err != nil {
+		return nil, 0, err
+	}
+
+	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 
@@ -28,8 +43,22 @@ func createTCPMapping(port int) (PortMapper, int, error) {
 // createUDPMapping establishes a UDP port mapping.
 // Moved from: packetlistener.go
 func createUDPMapping(port int) (PortMapper, int, error) {
-	mapper, err := NewPortMapper()
+	return createUDPMappingContext(context.Background(), port)
+}
+
+// createUDPMappingContext establishes a UDP port mapping with context support.
+// The context is checked before and after the discovery and mapping operations.
+func createUDPMappingContext(ctx context.Context, port int) (PortMapper, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	mapper, err := NewPortMapperContext(ctx)
 	if err != nil {
+		return nil, 0, err
+	}
+
+	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 

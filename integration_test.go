@@ -1,6 +1,7 @@
 package nattraversal
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -417,6 +418,64 @@ func TestIntegrationWithRealNetworkConditions(t *testing.T) {
 					}
 				}
 			})
+		}
+	})
+}
+
+// TestContextCancellation tests that context cancellation works correctly
+func TestContextCancellation(t *testing.T) {
+	t.Run("Already cancelled context returns error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		// createTCPMappingContext should fail with cancelled context
+		_, _, err := createTCPMappingContext(ctx, 8080)
+		if err == nil {
+			t.Error("Expected error for cancelled context, got nil")
+		}
+		if err != context.Canceled {
+			t.Logf("Error type: %T, value: %v", err, err)
+		}
+	})
+
+	t.Run("Already cancelled context for UDP returns error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		// createUDPMappingContext should fail with cancelled context
+		_, _, err := createUDPMappingContext(ctx, 9090)
+		if err == nil {
+			t.Error("Expected error for cancelled context, got nil")
+		}
+	})
+
+	t.Run("NewPortMapperContext with cancelled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		_, err := NewPortMapperContext(ctx)
+		if err == nil {
+			t.Error("Expected error for cancelled context, got nil")
+		}
+	})
+
+	t.Run("Context with deadline passes to functions", func(t *testing.T) {
+		// Create a context with a very short timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+		defer cancel()
+
+		// Wait for timeout
+		time.Sleep(1 * time.Millisecond)
+
+		// Context should be expired
+		if ctx.Err() == nil {
+			t.Error("Expected context to be expired")
+		}
+
+		// Functions should return error for expired context
+		_, _, err := createTCPMappingContext(ctx, 8080)
+		if err == nil {
+			t.Error("Expected error for expired context, got nil")
 		}
 	})
 }
