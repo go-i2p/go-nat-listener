@@ -8,24 +8,89 @@ import (
 	"github.com/huin/goupnp/dcps/internetgateway2"
 )
 
+// upnpClient defines the interface for UPnP IGD client operations.
+// This is satisfied by WANIPConnection1, WANIPConnection2, and WANPPPConnection1.
+type upnpClient interface {
+	AddPortMapping(
+		NewRemoteHost string,
+		NewExternalPort uint16,
+		NewProtocol string,
+		NewInternalPort uint16,
+		NewInternalClient string,
+		NewEnabled bool,
+		NewPortMappingDescription string,
+		NewLeaseDuration uint32,
+	) error
+	DeletePortMapping(
+		NewRemoteHost string,
+		NewExternalPort uint16,
+		NewProtocol string,
+	) error
+	GetExternalIPAddress() (string, error)
+}
+
 // UPnPMapper implements PortMapper using UPnP IGD protocol.
-// Moved from: upnp.go
+// Supports WANIPConnection1, WANIPConnection2, and WANPPPConnection1 services.
 type UPnPMapper struct {
-	client internetgateway2.WANPPPConnection1
+	client upnpClient
 }
 
 // NewUPnPMapper discovers and creates a UPnP mapper.
+// It attempts discovery in order of preference: WANIPConnection2, WANIPConnection1,
+// then WANPPPConnection1, using the first service that responds with available devices.
 func NewUPnPMapper() (*UPnPMapper, error) {
+	// Try WANIPConnection2 first (newest, most feature-rich)
+	if client, err := discoverWANIPConnection2(); err == nil {
+		return &UPnPMapper{client: client}, nil
+	}
+
+	// Try WANIPConnection1 (common on cable/fiber routers)
+	if client, err := discoverWANIPConnection1(); err == nil {
+		return &UPnPMapper{client: client}, nil
+	}
+
+	// Try WANPPPConnection1 (PPPoE routers like DSL)
+	if client, err := discoverWANPPPConnection1(); err == nil {
+		return &UPnPMapper{client: client}, nil
+	}
+
+	return nil, fmt.Errorf("no UPnP IGD devices found (tried WANIPConnection2, WANIPConnection1, WANPPPConnection1)")
+}
+
+// discoverWANIPConnection2 attempts to find WANIPConnection2 clients.
+func discoverWANIPConnection2() (upnpClient, error) {
+	clients, _, err := internetgateway2.NewWANIPConnection2Clients()
+	if err != nil {
+		return nil, err
+	}
+	if len(clients) == 0 {
+		return nil, fmt.Errorf("no WANIPConnection2 devices found")
+	}
+	return clients[0], nil
+}
+
+// discoverWANIPConnection1 attempts to find WANIPConnection1 clients.
+func discoverWANIPConnection1() (upnpClient, error) {
+	clients, _, err := internetgateway2.NewWANIPConnection1Clients()
+	if err != nil {
+		return nil, err
+	}
+	if len(clients) == 0 {
+		return nil, fmt.Errorf("no WANIPConnection1 devices found")
+	}
+	return clients[0], nil
+}
+
+// discoverWANPPPConnection1 attempts to find WANPPPConnection1 clients.
+func discoverWANPPPConnection1() (upnpClient, error) {
 	clients, _, err := internetgateway2.NewWANPPPConnection1Clients()
 	if err != nil {
-		return nil, fmt.Errorf("UPnP discovery failed: %w", err)
+		return nil, err
 	}
-
 	if len(clients) == 0 {
-		return nil, fmt.Errorf("no UPnP IGD devices found")
+		return nil, fmt.Errorf("no WANPPPConnection1 devices found")
 	}
-
-	return &UPnPMapper{client: *clients[0]}, nil
+	return clients[0], nil
 }
 
 // MapPort creates a port mapping via UPnP.
