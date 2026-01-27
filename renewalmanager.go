@@ -31,6 +31,8 @@ func NewRenewalManager(mapper PortMapper, protocol string, internalPort, externa
 }
 
 // Start begins the renewal process in a background goroutine.
+// Multiple Start/Stop cycles are safe - each cycle creates fresh channels
+// and the goroutine captures local references to avoid data races.
 func (r *RenewalManager) Start() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -40,9 +42,14 @@ func (r *RenewalManager) Start() {
 	}
 
 	r.started = true
-	r.done = make(chan struct{}) // Create new channel each time
+	r.done = make(chan struct{})
 	r.ticker = time.NewTicker(renewalInterval)
-	go r.renewLoop()
+
+	// Capture local references to avoid data race between goroutine reads
+	// and subsequent Start() writes after Stop() is called.
+	done := r.done
+	ticker := r.ticker
+	go r.renewLoop(ticker.C, done)
 }
 
 // Stop terminates the renewal process and unmaps the port.
@@ -69,12 +76,14 @@ func (r *RenewalManager) Stop() {
 }
 
 // renewLoop runs the renewal ticker in a goroutine.
-func (r *RenewalManager) renewLoop() {
+// It receives the ticker channel and done channel as parameters to avoid
+// data races when Start() is called after Stop() on the same instance.
+func (r *RenewalManager) renewLoop(tickerC <-chan time.Time, done <-chan struct{}) {
 	for {
 		select {
-		case <-r.ticker.C:
+		case <-tickerC:
 			r.renew()
-		case <-r.done:
+		case <-done:
 			return
 		}
 	}
