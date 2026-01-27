@@ -2,14 +2,22 @@ package nattraversal
 
 import (
 	"net"
+	"sync"
 	"time"
 )
 
 // NATPacketConn wraps a net.PacketConn with NAT-aware addressing.
-// Moved from: packetconn.go
+// It coordinates with NATPacketListener to ensure Close() is idempotent
+// and safe to call from either the connection or the listener.
 type NATPacketConn struct {
 	net.PacketConn
 	localAddr *NATAddr
+
+	// closeOnce ensures the underlying connection is closed exactly once,
+	// preventing double-close issues when both NATPacketConn.Close() and
+	// NATPacketListener.Close() are called.
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // LocalAddr returns the local network address with NAT info.
@@ -28,8 +36,13 @@ func (c *NATPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 // Close closes the connection.
+// This method is idempotent - calling it multiple times is safe and will
+// only close the underlying connection once, returning the same error.
 func (c *NATPacketConn) Close() error {
-	return c.PacketConn.Close()
+	c.closeOnce.Do(func() {
+		c.closeErr = c.PacketConn.Close()
+	})
+	return c.closeErr
 }
 
 // SetDeadline sets the read and write deadlines.

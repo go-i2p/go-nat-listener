@@ -35,6 +35,9 @@ func (l *NATPacketListener) Accept() (net.PacketConn, error) {
 }
 
 // Close closes the packet listener and stops port renewal.
+// This method is idempotent - calling it multiple times is safe.
+// It coordinates with NATPacketConn.Close() to ensure the underlying
+// connection is only closed once, even if both are called.
 func (l *NATPacketListener) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -45,6 +48,15 @@ func (l *NATPacketListener) Close() error {
 	l.closed = true
 
 	l.renewal.Stop()
+
+	// If a NATPacketConn was created, close through it to use sync.Once
+	// This ensures the underlying connection is closed exactly once,
+	// even if NATPacketConn.Close() was already called.
+	if l.cachedPacketConn != nil {
+		return l.cachedPacketConn.Close()
+	}
+
+	// No NATPacketConn was created, close the underlying conn directly
 	return l.conn.Close()
 }
 

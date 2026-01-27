@@ -114,6 +114,88 @@ func TestPacketListenerFunctionality(t *testing.T) {
 	})
 }
 
+// TestNATPacketConnDoubleClose verifies that NATPacketConn.Close() is idempotent
+// and safe to call multiple times without panicking or returning errors on subsequent calls.
+func TestNATPacketConnDoubleClose(t *testing.T) {
+	t.Run("Double close on NATPacketConn is safe", func(t *testing.T) {
+		// Create a real UDP connection for testing
+		conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("Failed to create UDP connection: %v", err)
+		}
+
+		addr := NewNATAddr("udp", conn.LocalAddr().String(), "203.0.113.1:12345")
+		natConn := &NATPacketConn{
+			PacketConn: conn,
+			localAddr:  addr,
+		}
+
+		// First close should succeed
+		err = natConn.Close()
+		if err != nil {
+			t.Errorf("First Close() should succeed, got: %v", err)
+		}
+
+		// Second close should also succeed (no panic, returns same error)
+		err = natConn.Close()
+		if err != nil {
+			t.Errorf("Second Close() should return same result (nil), got: %v", err)
+		}
+
+		// Third close should also be safe
+		err = natConn.Close()
+		if err != nil {
+			t.Errorf("Third Close() should return same result (nil), got: %v", err)
+		}
+	})
+
+	t.Run("Listener and PacketConn close coordination", func(t *testing.T) {
+		// Create a real UDP connection
+		conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("Failed to create UDP connection: %v", err)
+		}
+
+		mock := NewMockPortMapper()
+		addr := NewNATAddr("udp", conn.LocalAddr().String(), "203.0.113.1:12345")
+
+		// Create renewal manager (mapper, protocol, internalPort, externalPort)
+		renewalManager := NewRenewalManager(mock, "UDP", 12345, 12345)
+
+		// Create NATPacketListener
+		listener := &NATPacketListener{
+			conn:         conn,
+			renewal:      renewalManager,
+			externalPort: 12345,
+			addr:         addr,
+		}
+
+		// Get the PacketConn - this creates the cached NATPacketConn
+		packetConn, err := listener.Accept()
+		if err != nil {
+			t.Fatalf("Accept failed: %v", err)
+		}
+
+		// Close the PacketConn first
+		err = packetConn.Close()
+		if err != nil {
+			t.Errorf("PacketConn.Close() should succeed, got: %v", err)
+		}
+
+		// Now close the listener - should NOT panic or error due to double-close
+		err = listener.Close()
+		if err != nil {
+			t.Errorf("Listener.Close() after PacketConn.Close() should succeed, got: %v", err)
+		}
+
+		// Close the listener again - should be idempotent
+		err = listener.Close()
+		if err != nil {
+			t.Errorf("Second Listener.Close() should succeed, got: %v", err)
+		}
+	})
+}
+
 // TestUPnPMapperSimulation tests UPnP-specific behavior
 func TestUPnPMapperSimulation(t *testing.T) {
 	t.Run("UPnP protocol simulation", func(t *testing.T) {
