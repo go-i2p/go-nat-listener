@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+// PortChangeCallback is called when the external port changes during renewal.
+// The callback receives the new external port number.
+type PortChangeCallback func(newExternalPort int)
+
 // RenewalManager handles automatic port mapping renewal.
 // Moved from: renew.go
 type RenewalManager struct {
@@ -17,6 +21,7 @@ type RenewalManager struct {
 	done         chan struct{}
 	mu           sync.Mutex
 	started      bool
+	onPortChange PortChangeCallback
 }
 
 // NewRenewalManager creates a renewal manager for a port mapping.
@@ -28,6 +33,23 @@ func NewRenewalManager(mapper PortMapper, protocol string, internalPort, externa
 		externalPort: externalPort,
 		// done channel will be created when Start() is called
 	}
+}
+
+// SetPortChangeCallback sets a callback function that will be invoked when
+// the external port changes during renewal. This can happen if the NAT device
+// assigns a different port during renewal (rare but possible).
+func (r *RenewalManager) SetPortChangeCallback(callback PortChangeCallback) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onPortChange = callback
+}
+
+// ExternalPort returns the current external port number.
+// This may change if the NAT device assigns a different port during renewal.
+func (r *RenewalManager) ExternalPort() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.externalPort
 }
 
 // Start begins the renewal process in a background goroutine.
@@ -90,16 +112,36 @@ func (r *RenewalManager) renewLoop(tickerC <-chan time.Time, done <-chan struct{
 }
 
 // renew attempts to refresh the port mapping.
+// If the NAT device assigns a different external port during renewal,
+// the callback (if set) will be invoked with the new port number.
 func (r *RenewalManager) renew() {
-	_, err := r.mapper.MapPort(r.protocol, r.internalPort, mappingDuration)
+	newPort, err := r.mapper.MapPort(r.protocol, r.internalPort, mappingDuration)
 	if err != nil {
 		slog.Warn("port mapping renewal failed",
 			"protocol", r.protocol,
 			"port", r.externalPort,
 			"error", err)
-	} else {
-		slog.Debug("port mapping renewed",
-			"protocol", r.protocol,
-			"port", r.externalPort)
+		return
 	}
+
+	r.mu.Lock()
+	oldPort := r.externalPort
+	callback := r.onPortChange
+	if newPort != oldPort {
+		r.externalPort = newPort
+		slog.Info("external port changed during renewal",
+			"protocol", r.protocol,
+			"oldPort", oldPort,
+			"newPort", newPort)
+	}
+	r.mu.Unlock()
+
+	// Invoke callback outside the lock to prevent deadlocks
+	if newPort != oldPort && callback != nil {
+		callback(newPort)
+	}
+
+	slog.Debug("port mapping renewed",
+		"protocol", r.protocol,
+		"port", newPort)
 }

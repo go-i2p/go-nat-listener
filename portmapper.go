@@ -14,15 +14,15 @@ func NewPortMapper() (PortMapper, error) {
 }
 
 // NewPortMapperContext creates a port mapper with context support, trying UPnP first, then NAT-PMP.
-// The context is checked between discovery attempts, allowing cancellation during slow network operations.
+// The context is passed through to the discovery process, allowing cancellation during slow network operations.
 func NewPortMapperContext(ctx context.Context) (PortMapper, error) {
 	// Check context before starting
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	// Try UPnP first
-	upnp, err := NewUPnPMapper()
+	// Try UPnP first with context support
+	upnp, err := NewUPnPMapperContext(ctx)
 	if err == nil {
 		return upnp, nil
 	}

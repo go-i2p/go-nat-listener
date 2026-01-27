@@ -24,6 +24,8 @@ go get github.com/go-i2p/go-nat-listener
 
 ## Quick Start
 
+> **Note:** This library only supports IPv4 networks. See [Limitations](#limitations) for details.
+
 ### TCP Listener
 
 ```go
@@ -166,7 +168,7 @@ Implements `net.Listener` with automatic NAT traversal support:
 
 #### `NATPacketListener`
 Provides UDP packet listening with NAT traversal:
-- `Accept() (net.PacketConn, error)` - Returns the underlying packet connection
+- `Accept() (net.PacketConn, error)` - Returns the underlying packet connection. Unlike TCP's `Accept()` which blocks for new connections, this returns the same cached `NATPacketConn` instance each time (UDP is connectionless). Prefer using `PacketConn()` for direct access.
 - `Close() error` - Closes the listener and stops port renewal
 - `Addr() net.Addr` - Returns the NAT-aware address
 - `PacketConn() net.PacketConn` - Direct access to the packet connection

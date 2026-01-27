@@ -12,9 +12,22 @@ type NATListener struct {
 	listener     net.Listener
 	renewal      *RenewalManager
 	externalPort int
+	externalIP   string
 	addr         *NATAddr
 	closed       bool
 	mu           sync.Mutex
+}
+
+// updateExternalPort handles external port changes during renewal.
+// It updates the externalPort field and recreates the NATAddr with the new port.
+func (l *NATListener) updateExternalPort(newPort int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.externalPort = newPort
+	// Recreate NATAddr with the new external port
+	newExternalAddr := fmt.Sprintf("%s:%d", l.externalIP, newPort)
+	l.addr = NewNATAddr(l.addr.Network(), l.addr.InternalAddr(), newExternalAddr)
 }
 
 // Accept waits for and returns the next connection to the listener.
@@ -55,11 +68,15 @@ func (l *NATListener) Close() error {
 
 // Addr returns the listener's network address.
 func (l *NATListener) Addr() net.Addr {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.addr
 }
 
 // ExternalPort returns the external port number assigned by the NAT device.
-// This is a convenience method that avoids parsing the port from Addr().String().
+// This value may change if the NAT device assigns a different port during renewal.
 func (l *NATListener) ExternalPort() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.externalPort
 }

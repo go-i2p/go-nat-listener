@@ -58,12 +58,18 @@ func ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, err
 	addr := NewNATAddr("udp", internalAddr, externalAddr)
 
 	renewal := NewRenewalManager(mapper, "UDP", port, externalPort)
-	renewal.Start()
 
-	return &NATPacketListener{
+	packetListener := &NATPacketListener{
 		conn:         conn,
 		renewal:      renewal,
 		externalPort: externalPort,
+		externalIP:   externalIP,
 		addr:         addr,
-	}, nil
+	}
+
+	// Set up callback to handle external port changes during renewal
+	renewal.SetPortChangeCallback(packetListener.updateExternalPort)
+	renewal.Start()
+
+	return packetListener, nil
 }

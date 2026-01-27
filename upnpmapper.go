@@ -1,6 +1,7 @@
 package nattraversal
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -36,30 +37,52 @@ type UPnPMapper struct {
 }
 
 // NewUPnPMapper discovers and creates a UPnP mapper.
+// This is a convenience wrapper around NewUPnPMapperContext using context.Background().
+func NewUPnPMapper() (*UPnPMapper, error) {
+	return NewUPnPMapperContext(context.Background())
+}
+
+// NewUPnPMapperContext discovers and creates a UPnP mapper with context support.
+// The context allows cancellation of the discovery process, which can take several seconds.
 // It attempts discovery in order of preference: WANIPConnection2, WANIPConnection1,
 // then WANPPPConnection1, using the first service that responds with available devices.
-func NewUPnPMapper() (*UPnPMapper, error) {
+func NewUPnPMapperContext(ctx context.Context) (*UPnPMapper, error) {
+	// Check context before starting
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	// Try WANIPConnection2 first (newest, most feature-rich)
-	if client, err := discoverWANIPConnection2(); err == nil {
+	if client, err := discoverWANIPConnection2Ctx(ctx); err == nil {
 		return &UPnPMapper{client: client}, nil
+	}
+
+	// Check context between attempts
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled after WANIPConnection2 attempt: %w", err)
 	}
 
 	// Try WANIPConnection1 (common on cable/fiber routers)
-	if client, err := discoverWANIPConnection1(); err == nil {
+	if client, err := discoverWANIPConnection1Ctx(ctx); err == nil {
 		return &UPnPMapper{client: client}, nil
 	}
 
+	// Check context between attempts
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled after WANIPConnection1 attempt: %w", err)
+	}
+
 	// Try WANPPPConnection1 (PPPoE routers like DSL)
-	if client, err := discoverWANPPPConnection1(); err == nil {
+	if client, err := discoverWANPPPConnection1Ctx(ctx); err == nil {
 		return &UPnPMapper{client: client}, nil
 	}
 
 	return nil, fmt.Errorf("no UPnP IGD devices found (tried WANIPConnection2, WANIPConnection1, WANPPPConnection1)")
 }
 
-// discoverWANIPConnection2 attempts to find WANIPConnection2 clients.
-func discoverWANIPConnection2() (upnpClient, error) {
-	clients, _, err := internetgateway2.NewWANIPConnection2Clients()
+// discoverWANIPConnection2Ctx attempts to find WANIPConnection2 clients with context support.
+func discoverWANIPConnection2Ctx(ctx context.Context) (upnpClient, error) {
+	clients, _, err := internetgateway2.NewWANIPConnection2ClientsCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -69,9 +92,9 @@ func discoverWANIPConnection2() (upnpClient, error) {
 	return clients[0], nil
 }
 
-// discoverWANIPConnection1 attempts to find WANIPConnection1 clients.
-func discoverWANIPConnection1() (upnpClient, error) {
-	clients, _, err := internetgateway2.NewWANIPConnection1Clients()
+// discoverWANIPConnection1Ctx attempts to find WANIPConnection1 clients with context support.
+func discoverWANIPConnection1Ctx(ctx context.Context) (upnpClient, error) {
+	clients, _, err := internetgateway2.NewWANIPConnection1ClientsCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +104,9 @@ func discoverWANIPConnection1() (upnpClient, error) {
 	return clients[0], nil
 }
 
-// discoverWANPPPConnection1 attempts to find WANPPPConnection1 clients.
-func discoverWANPPPConnection1() (upnpClient, error) {
-	clients, _, err := internetgateway2.NewWANPPPConnection1Clients()
+// discoverWANPPPConnection1Ctx attempts to find WANPPPConnection1 clients with context support.
+func discoverWANPPPConnection1Ctx(ctx context.Context) (upnpClient, error) {
+	clients, _, err := internetgateway2.NewWANPPPConnection1ClientsCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
