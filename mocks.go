@@ -119,6 +119,11 @@ func (m *MockPortMapper) MapPort(protocol string, internalPort int, duration tim
 		return 0, fmt.Errorf("mock: random failure occurred")
 	}
 
+	// Validate port range (matching real implementation behavior)
+	if internalPort < 1 || internalPort > 65535 {
+		return 0, fmt.Errorf("mock: invalid port number: %d (must be 1-65535)", internalPort)
+	}
+
 	// Validate protocol
 	if protocol != "TCP" && protocol != "UDP" {
 		return 0, fmt.Errorf("mock: unsupported protocol: %s", protocol)
@@ -162,6 +167,11 @@ func (m *MockPortMapper) UnmapPort(protocol string, externalPort int) error {
 	// Simulate failure rate
 	if m.failureRate > 0 && m.shouldFail() {
 		return fmt.Errorf("mock: random failure occurred")
+	}
+
+	// Validate port range (matching real implementation behavior)
+	if externalPort < 1 || externalPort > 65535 {
+		return fmt.Errorf("mock: invalid port number: %d (must be 1-65535)", externalPort)
 	}
 
 	key := fmt.Sprintf("%s:%d", protocol, externalPort)

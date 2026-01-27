@@ -38,6 +38,41 @@ func TestPortMappingCreationAndDeletion(t *testing.T) {
 			duration: 5 * time.Minute,
 			wantErr:  true,
 		},
+		{
+			name:     "Port below valid range",
+			protocol: "TCP",
+			port:     0,
+			duration: 5 * time.Minute,
+			wantErr:  true,
+		},
+		{
+			name:     "Negative port number",
+			protocol: "TCP",
+			port:     -1,
+			duration: 5 * time.Minute,
+			wantErr:  true,
+		},
+		{
+			name:     "Port above valid range",
+			protocol: "TCP",
+			port:     65536,
+			duration: 5 * time.Minute,
+			wantErr:  true,
+		},
+		{
+			name:     "Port at lower boundary",
+			protocol: "TCP",
+			port:     1,
+			duration: 5 * time.Minute,
+			wantErr:  false,
+		},
+		{
+			name:     "Port at upper boundary",
+			protocol: "TCP",
+			port:     65535,
+			duration: 5 * time.Minute,
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {

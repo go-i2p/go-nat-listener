@@ -132,7 +132,11 @@ func discoverGatewayFallback() (net.IP, error) {
 	}
 	defer conn.Close()
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	// Use safe type assertion to prevent potential panic
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return nil, fmt.Errorf("unexpected local address type: %T", conn.LocalAddr())
+	}
 	ip := localAddr.IP.To4()
 	if ip == nil {
 		return nil, fmt.Errorf("not IPv4 address")

@@ -95,6 +95,11 @@ func discoverWANPPPConnection1() (upnpClient, error) {
 
 // MapPort creates a port mapping via UPnP.
 func (u *UPnPMapper) MapPort(protocol string, internalPort int, duration time.Duration) (int, error) {
+	// Validate port range before uint16 cast to prevent silent overflow
+	if internalPort < 1 || internalPort > 65535 {
+		return 0, fmt.Errorf("invalid port number: %d (must be 1-65535)", internalPort)
+	}
+
 	localIP, err := u.getLocalIP()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get local IP: %w", err)
@@ -122,6 +127,11 @@ func (u *UPnPMapper) MapPort(protocol string, internalPort int, duration time.Du
 
 // UnmapPort removes a port mapping via UPnP.
 func (u *UPnPMapper) UnmapPort(protocol string, externalPort int) error {
+	// Validate port range before uint16 cast to prevent silent overflow
+	if externalPort < 1 || externalPort > 65535 {
+		return fmt.Errorf("invalid port number: %d (must be 1-65535)", externalPort)
+	}
+
 	err := u.client.DeletePortMapping("", uint16(externalPort), protocol)
 	if err != nil {
 		return fmt.Errorf("UPnP port unmapping failed: %w", err)
@@ -146,6 +156,10 @@ func (u *UPnPMapper) getLocalIP() (string, error) {
 	}
 	defer conn.Close()
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	// Use safe type assertion to prevent potential panic
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return "", fmt.Errorf("unexpected local address type: %T", conn.LocalAddr())
+	}
 	return localAddr.IP.String(), nil
 }

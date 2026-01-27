@@ -35,6 +35,11 @@ func NewNATPMPMapper() (*NATPMPMapper, error) {
 
 // MapPort creates a port mapping via NAT-PMP.
 func (n *NATPMPMapper) MapPort(protocol string, internalPort int, duration time.Duration) (int, error) {
+	// Validate port range to prevent invalid mappings
+	if internalPort < 1 || internalPort > 65535 {
+		return 0, fmt.Errorf("invalid port number: %d (must be 1-65535)", internalPort)
+	}
+
 	protocolStr := strings.ToUpper(protocol)
 	if protocolStr != "TCP" && protocolStr != "UDP" {
 		return 0, fmt.Errorf("unsupported protocol: %s", protocol)
@@ -56,6 +61,11 @@ func (n *NATPMPMapper) MapPort(protocol string, internalPort int, duration time.
 
 // UnmapPort removes a port mapping via NAT-PMP.
 func (n *NATPMPMapper) UnmapPort(protocol string, externalPort int) error {
+	// Validate port range to prevent invalid unmappings
+	if externalPort < 1 || externalPort > 65535 {
+		return fmt.Errorf("invalid port number: %d (must be 1-65535)", externalPort)
+	}
+
 	protocolStr := strings.ToUpper(protocol)
 	if protocolStr != "TCP" && protocolStr != "UDP" {
 		return fmt.Errorf("unsupported protocol: %s", protocol)
