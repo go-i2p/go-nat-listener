@@ -51,7 +51,6 @@ func (n *NATPMPMapper) MapPort(protocol string, internalPort int, duration time.
 		internalPort,
 		int(duration.Seconds()),
 	)
-
 	if err != nil {
 		return 0, fmt.Errorf("NAT-PMP port mapping failed: %w", err)
 	}

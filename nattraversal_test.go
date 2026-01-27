@@ -180,7 +180,6 @@ func TestKeepAlivePacketTransmission(t *testing.T) {
 		// Simulate keep-alive packet
 		keepAliveData := []byte("KEEPALIVE")
 		n, err := conn.Write(keepAliveData)
-
 		if err != nil {
 			t.Fatalf("Failed to send keep-alive: %v", err)
 		}
@@ -261,7 +260,6 @@ func TestConnectionEstablishmentThroughNAT(t *testing.T) {
 			// Create port mapping for connection
 			internalPort := 8080
 			externalPort, err := mock.MapPort("TCP", internalPort, 5*time.Minute)
-
 			if err != nil {
 				t.Fatalf("Failed to create port mapping: %v", err)
 			}
@@ -379,7 +377,6 @@ func TestRouterProtocolNotSupported(t *testing.T) {
 		mock.SetProtocolSupport(true, false) // Only UPnP
 
 		_, err := mock.MapPort("TCP", 8080, 5*time.Minute)
-
 		if err != nil {
 			t.Errorf("Expected success with UPnP support, got: %v", err)
 		}
@@ -390,7 +387,6 @@ func TestRouterProtocolNotSupported(t *testing.T) {
 		mock.SetProtocolSupport(false, true) // Only NAT-PMP
 
 		_, err := mock.MapPort("TCP", 8080, 5*time.Minute)
-
 		if err != nil {
 			t.Errorf("Expected success with NAT-PMP support, got: %v", err)
 		}
@@ -513,7 +509,6 @@ func TestFirewallBlockingScenarios(t *testing.T) {
 		conn.SetFirewall(firewall)
 
 		_, err := conn.Write([]byte("test"))
-
 		if err != nil {
 			t.Errorf("Expected firewall to allow specific connection, got: %v", err)
 		}

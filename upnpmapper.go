@@ -140,7 +140,6 @@ func (u *UPnPMapper) MapPort(protocol string, internalPort int, duration time.Du
 		"nattraversal",       // description
 		leaseDuration,        // lease duration
 	)
-
 	if err != nil {
 		return 0, fmt.Errorf("UPnP port mapping failed: %w", err)
 	}
