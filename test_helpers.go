@@ -212,6 +212,30 @@ func (h *TestHelper) Cleanup() {
 	h.renewalMgrs = h.renewalMgrs[:0]
 }
 
+// Reset resets the TestHelper state between subtests to prevent state leakage.
+// This should be called at the start of each subtest when using a shared TestHelper.
+func (h *TestHelper) Reset() {
+	// Reset network conditions to defaults
+	h.conditions.PacketLoss = 0.0
+	h.conditions.Latency = 10 * time.Millisecond
+	h.conditions.Jitter = 2 * time.Millisecond
+	h.conditions.Bandwidth = 1024 * 1024
+	h.conditions.Blocked = false
+	h.conditions.Unreachable = false
+	h.conditions.SetRandomSeed(42) // Reset RNG for reproducibility
+
+	// Reset port mapper to defaults
+	h.portMapper.SetNATType(FullConeNAT)
+	h.portMapper.SetExternalIP("203.0.113.100")
+	h.portMapper.SetLatency(0)
+	h.portMapper.SetFailureRate(0)
+	h.portMapper.SetPortExhaustion(false)
+	h.portMapper.SetRandomSeed(42) // Reset RNG for reproducibility
+
+	// Reset firewall to defaults
+	h.firewall.Reset()
+}
+
 // RunWithCleanup runs a test function and ensures cleanup happens
 func (h *TestHelper) RunWithCleanup(testFunc func()) {
 	defer h.Cleanup()

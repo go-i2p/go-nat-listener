@@ -2,6 +2,7 @@ package nattraversal
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ type MockPortMapper struct {
 	failureRate    float64
 	portExhaustion bool
 	natType        NATType
+	rng            *rand.Rand // Seeded RNG for reproducible tests
 }
 
 // PortMapping represents a mock port mapping
@@ -47,7 +49,16 @@ func NewMockPortMapper() *MockPortMapper {
 		supportsUPnP:   true,
 		supportsNATPMP: true,
 		natType:        FullConeNAT,
+		rng:            rand.New(rand.NewSource(42)), // Fixed seed for reproducibility
 	}
+}
+
+// SetRandomSeed sets a custom random seed for reproducible tests.
+// Use different seeds to test different random scenarios deterministically.
+func (m *MockPortMapper) SetRandomSeed(seed int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.rng = rand.New(rand.NewSource(seed))
 }
 
 // SetExternalIP sets the mock external IP
@@ -230,17 +241,20 @@ func (m *MockPortMapper) generateExternalPort(internalPort int) int {
 		// Restricted: predictable mapping
 		return internalPort + 1000
 	case SymmetricNAT:
-		// Symmetric: different port for each destination
-		return internalPort + int(time.Now().UnixNano()%10000)
+		// Symmetric: different port for each destination (use seeded RNG)
+		return internalPort + m.rng.Intn(10000)
 	default:
 		return internalPort
 	}
 }
 
-// shouldFail determines if operation should fail based on failure rate
+// shouldFail determines if operation should fail based on failure rate.
+// Uses seeded RNG for reproducible test results.
 func (m *MockPortMapper) shouldFail() bool {
-	// Simple deterministic failure based on current time
-	return float64(time.Now().UnixNano()%100)/100.0 < m.failureRate
+	if m.failureRate <= 0 {
+		return false
+	}
+	return m.rng.Float64() < m.failureRate
 }
 
 // MockRenewalManager provides a testable renewal manager
@@ -296,6 +310,7 @@ type MockNetworkConditions struct {
 	Bandwidth   int64 // bytes per second
 	Blocked     bool
 	Unreachable bool
+	rng         *rand.Rand // Seeded RNG for reproducible tests
 }
 
 // NewMockNetworkConditions creates default network conditions
@@ -304,24 +319,32 @@ func NewMockNetworkConditions() *MockNetworkConditions {
 		PacketLoss: 0.0,
 		Latency:    10 * time.Millisecond,
 		Jitter:     2 * time.Millisecond,
-		Bandwidth:  1024 * 1024, // 1MB/s
+		Bandwidth:  1024 * 1024,                  // 1MB/s
+		rng:        rand.New(rand.NewSource(42)), // Fixed seed for reproducibility
 	}
 }
 
-// SimulatePacketLoss determines if a packet should be dropped
+// SetRandomSeed sets a custom random seed for reproducible tests.
+func (m *MockNetworkConditions) SetRandomSeed(seed int64) {
+	m.rng = rand.New(rand.NewSource(seed))
+}
+
+// SimulatePacketLoss determines if a packet should be dropped.
+// Uses seeded RNG for reproducible test results.
 func (m *MockNetworkConditions) SimulatePacketLoss() bool {
 	if m.PacketLoss <= 0 {
 		return false
 	}
-	return float64(time.Now().UnixNano()%100)/100.0 < m.PacketLoss
+	return m.rng.Float64() < m.PacketLoss
 }
 
-// SimulateLatency adds simulated network latency
+// SimulateLatency adds simulated network latency.
+// Uses seeded RNG for jitter calculation.
 func (m *MockNetworkConditions) SimulateLatency() {
 	if m.Latency > 0 {
 		jitter := time.Duration(0)
 		if m.Jitter > 0 {
-			jitter = time.Duration(time.Now().UnixNano() % int64(m.Jitter))
+			jitter = time.Duration(m.rng.Int63n(int64(m.Jitter)))
 		}
 		time.Sleep(m.Latency + jitter)
 	}
@@ -396,6 +419,16 @@ func (f *MockFirewall) IsBlocked(ip string, port int) bool {
 
 	// Return opposite of default policy
 	return !f.defaultPolicy
+}
+
+// Reset clears all firewall rules and resets to default allow policy.
+func (f *MockFirewall) Reset() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.blockedPorts = make(map[int]bool)
+	f.blockedIPs = make(map[string]bool)
+	f.allowedPairs = make(map[string]bool)
+	f.defaultPolicy = true
 }
 
 // MockUDPConn provides a mock UDP connection for testing
