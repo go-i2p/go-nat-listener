@@ -719,3 +719,193 @@ func BenchmarkConcurrentMappings(b *testing.B) {
 		}
 	})
 }
+
+// TestRenewalManagerPortChangeCallback tests that port change callbacks are invoked correctly
+func TestRenewalManagerPortChangeCallback(t *testing.T) {
+	t.Run("Callback invoked when port changes", func(t *testing.T) {
+		// Create a mock mapper that returns a different port on second call
+		callCount := 0
+		mock := NewMockPortMapper()
+		mock.SetExternalIP("203.0.113.100")
+
+		// Create a custom mock that changes port on subsequent calls
+		portChangingMapper := &portChangingMockMapper{
+			MockPortMapper: mock,
+			ports:          []int{8080, 9090}, // First call returns 8080, second returns 9090
+			callCount:      &callCount,
+		}
+
+		renewal := NewRenewalManager(portChangingMapper, "TCP", 8080, 8080)
+
+		var mu sync.Mutex
+		var newPortReceived int
+		callbackInvoked := false
+
+		renewal.SetPortChangeCallback(func(newPort int) {
+			mu.Lock()
+			defer mu.Unlock()
+			callbackInvoked = true
+			newPortReceived = newPort
+		})
+
+		// Manually trigger a renewal that will return a different port
+		callCount = 1 // Skip to second call which returns 9090
+		renewal.renew()
+
+		mu.Lock()
+		invoked := callbackInvoked
+		port := newPortReceived
+		mu.Unlock()
+
+		if !invoked {
+			t.Error("Expected callback to be invoked when port changed")
+		}
+
+		if port != 9090 {
+			t.Errorf("Expected new port to be 9090, got %d", port)
+		}
+
+		// Verify the renewal manager's port was updated
+		if renewal.ExternalPort() != 9090 {
+			t.Errorf("Expected RenewalManager external port to be 9090, got %d", renewal.ExternalPort())
+		}
+	})
+
+	t.Run("Callback not invoked when port stays the same", func(t *testing.T) {
+		mock := NewMockPortMapper()
+		mock.SetExternalIP("203.0.113.100")
+
+		renewal := NewRenewalManager(mock, "TCP", 8080, 8080)
+
+		callbackInvoked := false
+		renewal.SetPortChangeCallback(func(newPort int) {
+			callbackInvoked = true
+		})
+
+		// Initial mapping
+		mock.MapPort("TCP", 8080, 5*time.Minute)
+
+		// Trigger renewal - should return same port
+		renewal.renew()
+
+		if callbackInvoked {
+			t.Error("Callback should not be invoked when port stays the same")
+		}
+	})
+}
+
+// portChangingMockMapper is a mock that returns different ports on subsequent calls
+type portChangingMockMapper struct {
+	*MockPortMapper
+	ports     []int
+	callCount *int
+}
+
+func (m *portChangingMockMapper) MapPort(protocol string, internalPort int, duration time.Duration) (int, error) {
+	idx := *m.callCount
+	if idx >= len(m.ports) {
+		idx = len(m.ports) - 1
+	}
+	*m.callCount++
+	return m.ports[idx], nil
+}
+
+// TestNATListenerExternalPortUpdate tests that NATListener updates correctly when port changes
+func TestNATListenerExternalPortUpdate(t *testing.T) {
+	t.Run("NATListener updates external port and address", func(t *testing.T) {
+		// Create a listener directly for testing (bypassing actual network)
+		mock := NewMockPortMapper()
+		mock.SetExternalIP("203.0.113.100")
+
+		addr := NewNATAddr("tcp", "0.0.0.0:8080", "203.0.113.100:8080")
+		renewal := NewRenewalManager(mock, "TCP", 8080, 8080)
+
+		listener := &NATListener{
+			renewal:      renewal,
+			externalPort: 8080,
+			externalIP:   "203.0.113.100",
+			addr:         addr,
+		}
+
+		// Simulate port change callback
+		listener.updateExternalPort(9090)
+
+		if listener.ExternalPort() != 9090 {
+			t.Errorf("Expected external port to be 9090, got %d", listener.ExternalPort())
+		}
+
+		expectedAddr := "203.0.113.100:9090"
+		if listener.Addr().String() != expectedAddr {
+			t.Errorf("Expected address to be %s, got %s", expectedAddr, listener.Addr().String())
+		}
+	})
+}
+
+// TestNATPacketListenerExternalPortUpdate tests that NATPacketListener updates correctly when port changes
+func TestNATPacketListenerExternalPortUpdate(t *testing.T) {
+	t.Run("NATPacketListener updates external port and address", func(t *testing.T) {
+		mock := NewMockPortMapper()
+		mock.SetExternalIP("203.0.113.100")
+
+		addr := NewNATAddr("udp", "0.0.0.0:8080", "203.0.113.100:8080")
+		renewal := NewRenewalManager(mock, "UDP", 8080, 8080)
+
+		// Create a mock packet conn
+		localAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:8080")
+		remoteAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:9999")
+		mockConn := NewMockUDPConn(localAddr, remoteAddr)
+
+		listener := &NATPacketListener{
+			conn:         mockConn,
+			renewal:      renewal,
+			externalPort: 8080,
+			externalIP:   "203.0.113.100",
+			addr:         addr,
+		}
+
+		// Simulate port change callback
+		listener.updateExternalPort(9090)
+
+		if listener.ExternalPort() != 9090 {
+			t.Errorf("Expected external port to be 9090, got %d", listener.ExternalPort())
+		}
+
+		expectedAddr := "203.0.113.100:9090"
+		if listener.Addr().String() != expectedAddr {
+			t.Errorf("Expected address to be %s, got %s", expectedAddr, listener.Addr().String())
+		}
+	})
+
+	t.Run("Cached packet conn address is also updated", func(t *testing.T) {
+		mock := NewMockPortMapper()
+		mock.SetExternalIP("203.0.113.100")
+
+		addr := NewNATAddr("udp", "0.0.0.0:8080", "203.0.113.100:8080")
+		renewal := NewRenewalManager(mock, "UDP", 8080, 8080)
+
+		localAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:8080")
+		remoteAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:9999")
+		mockConn := NewMockUDPConn(localAddr, remoteAddr)
+
+		listener := &NATPacketListener{
+			conn:         mockConn,
+			renewal:      renewal,
+			externalPort: 8080,
+			externalIP:   "203.0.113.100",
+			addr:         addr,
+		}
+
+		// Create cached packet conn by calling PacketConn()
+		_ = listener.PacketConn()
+
+		// Simulate port change
+		listener.updateExternalPort(9090)
+
+		// Verify cached packet conn also has updated address
+		pconn := listener.PacketConn().(*NATPacketConn)
+		expectedAddr := "203.0.113.100:9090"
+		if pconn.LocalAddr().String() != expectedAddr {
+			t.Errorf("Expected cached conn address to be %s, got %s", expectedAddr, pconn.LocalAddr().String())
+		}
+	})
+}

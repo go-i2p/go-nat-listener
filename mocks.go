@@ -587,3 +587,47 @@ func (c *MockUDPConn) SetFirewall(firewall *MockFirewall) {
 	defer c.mu.Unlock()
 	c.firewall = firewall
 }
+
+// ReadFrom implements net.PacketConn interface
+func (c *MockUDPConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return 0, nil, fmt.Errorf("connection closed")
+	}
+
+	if len(c.readBuffer) == 0 {
+		return 0, nil, fmt.Errorf("no data available")
+	}
+
+	data := c.readBuffer[0]
+	c.readBuffer = c.readBuffer[1:]
+
+	n = copy(p, data)
+	return n, c.remoteAddr, nil
+}
+
+// WriteTo implements net.PacketConn interface
+func (c *MockUDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return 0, fmt.Errorf("connection closed")
+	}
+
+	// Apply network conditions
+	if c.conditions != nil && c.conditions.PacketLoss > 0 {
+		if c.conditions.rng.Float64() < c.conditions.PacketLoss {
+			return len(p), nil // Simulate packet loss
+		}
+	}
+
+	// Store the written data
+	dataCopy := make([]byte, len(p))
+	copy(dataCopy, p)
+	c.writeBuffer = append(c.writeBuffer, dataCopy)
+
+	return len(p), nil
+}
