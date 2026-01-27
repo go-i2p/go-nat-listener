@@ -124,6 +124,7 @@ Implements `net.Listener` with automatic NAT traversal support:
 - `Accept() (net.Conn, error)` - Accepts incoming connections
 - `Close() error` - Closes the listener and stops port renewal
 - `Addr() net.Addr` - Returns the NAT-aware address
+- `ExternalPort() int` - Returns the external port number assigned by the NAT device
 
 #### `NATPacketListener`
 Provides UDP packet listening with NAT traversal:
@@ -131,13 +132,16 @@ Provides UDP packet listening with NAT traversal:
 - `Close() error` - Closes the listener and stops port renewal
 - `Addr() net.Addr` - Returns the NAT-aware address
 - `PacketConn() net.PacketConn` - Direct access to the packet connection
+- `ExternalPort() int` - Returns the external port number assigned by the NAT device
 
 #### `NATAddr`
 Network address with NAT traversal information:
 - `Network() string` - Returns the network type (tcp/udp)
-- `String() string` - Returns the external address
+- `String() string` - Returns the external address (same as `ExternalAddr()`)
 - `InternalAddr() string` - Returns the internal network address
 - `ExternalAddr() string` - Returns the external network address
+
+> **Note:** `String()` returns the external address to satisfy the `net.Addr` interface, making `NATAddr` work seamlessly with code expecting standard network addresses.
 
 #### `NATConn`
 Wraps `net.Conn` with NAT-aware addressing:
@@ -173,16 +177,66 @@ listener, err := nattraversal.Listen(8080)
 if err != nil {
     log.Printf("NAT traversal failed: %v", err)
     // Fall back to local-only listener
+    // Note: fallbackListener is net.Listener, not *NATListener
     fallbackListener, err := net.Listen("tcp", ":8080")
     if err != nil {
         log.Fatal("All listener creation failed:", err)
     }
-    listener = fallbackListener
+    // Use the fallback listener directly (it implements net.Listener)
+    defer fallbackListener.Close()
+    for {
+        conn, err := fallbackListener.Accept()
+        if err != nil {
+            log.Printf("Accept error: %v", err)
+            continue
+        }
+        go handleConnection(conn)
+    }
+}
+// Use NAT listener normally
+defer listener.Close()
+for {
+    conn, err := listener.Accept()
+    if err != nil {
+        log.Printf("Accept error: %v", err)
+        continue
+    }
+    go handleConnection(conn)
+}
+```
+
+Alternatively, use the `net.Listener` interface for unified handling:
+
+```go
+var listener net.Listener
+var err error
+
+natListener, err := nattraversal.Listen(8080)
+if err != nil {
+    log.Printf("NAT traversal failed: %v, falling back to local listener", err)
+    listener, err = net.Listen("tcp", ":8080")
+    if err != nil {
+        log.Fatal("All listener creation failed:", err)
+    }
+} else {
+    listener = natListener
+    log.Printf("Listening on external address: %s", natListener.Addr())
+}
+defer listener.Close()
+
+for {
+    conn, err := listener.Accept()
+    if err != nil {
+        log.Printf("Accept error: %v", err)
+        continue
+    }
+    go handleConnection(conn)
 }
 ```
 
 ## Limitations
 
+- **IPv4 only**: This library only supports IPv4 networks. IPv6 environments are not supported due to NAT-PMP protocol limitations and gateway discovery mechanisms that rely on IPv4 addressing
 - Requires router support for UPnP or NAT-PMP protocols
 - May not work with symmetric NAT configurations
 - Firewall settings may block automatic port mapping

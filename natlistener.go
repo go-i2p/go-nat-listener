@@ -57,3 +57,9 @@ func (l *NATListener) Close() error {
 func (l *NATListener) Addr() net.Addr {
 	return l.addr
 }
+
+// ExternalPort returns the external port number assigned by the NAT device.
+// This is a convenience method that avoids parsing the port from Addr().String().
+func (l *NATListener) ExternalPort() int {
+	return l.externalPort
+}

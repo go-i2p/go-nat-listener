@@ -65,6 +65,12 @@ func (l *NATPacketListener) Addr() net.Addr {
 	return l.addr
 }
 
+// ExternalPort returns the external port number assigned by the NAT device.
+// This is a convenience method that avoids parsing the port from Addr().String().
+func (l *NATPacketListener) ExternalPort() int {
+	return l.externalPort
+}
+
 // PacketConn returns the underlying packet connection.
 // Returns the same cached instance on each call.
 func (l *NATPacketListener) PacketConn() net.PacketConn {

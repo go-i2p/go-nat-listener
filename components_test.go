@@ -95,6 +95,57 @@ func TestListenerFunctionality(t *testing.T) {
 	})
 }
 
+// TestExternalPortGetter tests the ExternalPort() convenience methods
+func TestExternalPortGetter(t *testing.T) {
+	t.Run("NATListener ExternalPort returns correct value", func(t *testing.T) {
+		// Create a real TCP listener for testing
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("Failed to create TCP listener: %v", err)
+		}
+
+		mock := NewMockPortMapper()
+		addr := NewNATAddr("tcp", ln.Addr().String(), "203.0.113.1:12345")
+		renewalManager := NewRenewalManager(mock, "TCP", 12345, 12345)
+
+		listener := &NATListener{
+			listener:     ln,
+			renewal:      renewalManager,
+			externalPort: 12345,
+			addr:         addr,
+		}
+		defer listener.Close()
+
+		if listener.ExternalPort() != 12345 {
+			t.Errorf("Expected ExternalPort() to return 12345, got %d", listener.ExternalPort())
+		}
+	})
+
+	t.Run("NATPacketListener ExternalPort returns correct value", func(t *testing.T) {
+		// Create a real UDP connection for testing
+		conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("Failed to create UDP connection: %v", err)
+		}
+
+		mock := NewMockPortMapper()
+		addr := NewNATAddr("udp", conn.LocalAddr().String(), "203.0.113.1:54321")
+		renewalManager := NewRenewalManager(mock, "UDP", 54321, 54321)
+
+		listener := &NATPacketListener{
+			conn:         conn,
+			renewal:      renewalManager,
+			externalPort: 54321,
+			addr:         addr,
+		}
+		defer listener.Close()
+
+		if listener.ExternalPort() != 54321 {
+			t.Errorf("Expected ExternalPort() to return 54321, got %d", listener.ExternalPort())
+		}
+	})
+}
+
 // TestPacketListenerFunctionality tests NAT packet listener operations
 func TestPacketListenerFunctionality(t *testing.T) {
 	t.Run("NAT packet connection properties", func(t *testing.T) {
