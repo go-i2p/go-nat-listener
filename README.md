@@ -157,6 +157,18 @@ Creates a UDP packet listener with NAT traversal on the specified port. Returns 
 #### `ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, error)`
 Creates a UDP packet listener with NAT traversal on the specified port, with context support for cancellation and timeouts. The context can be used to cancel the discovery and mapping operations. Once the listener is created, the context is no longer used - use `Close()` to stop the listener.
 
+#### `ListenWithFallback(port int) (*NATListener, error)`
+Creates a TCP listener that attempts NAT traversal first, but falls back to a standard `net.Listener` if NAT traversal fails (e.g., when UPnP and NAT-PMP are both unavailable). This is useful when you want your application to work even in environments without NAT support. Use `IsFallback()` to check if fallback mode is active.
+
+#### `ListenWithFallbackContext(ctx context.Context, port int) (*NATListener, error)`
+Creates a TCP listener with fallback support and context for cancellation/timeouts.
+
+#### `ListenPacketWithFallback(port int) (*NATPacketListener, error)`
+Creates a UDP packet listener that attempts NAT traversal first, but falls back to a standard `net.PacketConn` if NAT traversal fails. Use `IsFallback()` to check if fallback mode is active.
+
+#### `ListenPacketWithFallbackContext(ctx context.Context, port int) (*NATPacketListener, error)`
+Creates a UDP packet listener with fallback support and context for cancellation/timeouts.
+
 ### Types
 
 #### `NATListener`
@@ -164,7 +176,8 @@ Implements `net.Listener` with automatic NAT traversal support:
 - `Accept() (net.Conn, error)` - Accepts incoming connections
 - `Close() error` - Closes the listener and stops port renewal
 - `Addr() net.Addr` - Returns the NAT-aware address
-- `ExternalPort() int` - Returns the external port number assigned by the NAT device
+- `ExternalPort() int` - Returns the external port number assigned by the NAT device (same as internal port in fallback mode)
+- `IsFallback() bool` - Returns true if NAT traversal failed and the listener is using a standard `net.Listener` without NAT hole-punching
 
 #### `NATPacketListener`
 Provides UDP packet listening with NAT traversal:
@@ -172,7 +185,8 @@ Provides UDP packet listening with NAT traversal:
 - `Close() error` - Closes the listener and stops port renewal
 - `Addr() net.Addr` - Returns the NAT-aware address
 - `PacketConn() net.PacketConn` - Direct access to the packet connection
-- `ExternalPort() int` - Returns the external port number assigned by the NAT device
+- `ExternalPort() int` - Returns the external port number assigned by the NAT device (same as internal port in fallback mode)
+- `IsFallback() bool` - Returns true if NAT traversal failed and the listener is using a standard `net.PacketConn` without NAT hole-punching
 
 #### `NATAddr`
 Network address with NAT traversal information:
@@ -211,6 +225,35 @@ The library provides descriptive error messages for common failure scenarios:
 - Network connectivity problems
 
 Example error handling:
+
+The simplest approach is to use the built-in fallback functions:
+
+```go
+// ListenWithFallback automatically falls back to a standard listener
+// if NAT traversal fails - no manual error handling needed!
+listener, err := nattraversal.ListenWithFallback(8080)
+if err != nil {
+    log.Fatal("Failed to create listener:", err)
+}
+defer listener.Close()
+
+if listener.IsFallback() {
+    log.Println("Running in fallback mode (no NAT traversal)")
+} else {
+    log.Printf("Listening on external address: %s", listener.Addr())
+}
+
+for {
+    conn, err := listener.Accept()
+    if err != nil {
+        log.Printf("Accept error: %v", err)
+        continue
+    }
+    go handleConnection(conn)
+}
+```
+
+For more control, you can handle errors manually:
 
 ```go
 listener, err := nattraversal.Listen(8080)

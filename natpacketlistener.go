@@ -15,6 +15,7 @@ type NATPacketListener struct {
 	externalIP   string
 	addr         *NATAddr
 	closed       bool
+	fallback     bool // true if NAT traversal failed and we're using a standard listener
 	mu           sync.Mutex
 	// cachedPacketConn is the cached NATPacketConn wrapper, created once and reused
 	cachedPacketConn *NATPacketConn
@@ -65,7 +66,9 @@ func (l *NATPacketListener) Close() error {
 	}
 	l.closed = true
 
-	l.renewal.Stop()
+	if l.renewal != nil {
+		l.renewal.Stop()
+	}
 
 	// If a NATPacketConn was created, close through it to use sync.Once
 	// This ensures the underlying connection is closed exactly once,
@@ -87,10 +90,19 @@ func (l *NATPacketListener) Addr() net.Addr {
 
 // ExternalPort returns the external port number assigned by the NAT device.
 // This value may change if the NAT device assigns a different port during renewal.
+// In fallback mode, this returns the same as the internal port.
 func (l *NATPacketListener) ExternalPort() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.externalPort
+}
+
+// IsFallback returns true if NAT traversal failed and the listener is using
+// a standard net.PacketConn without NAT hole-punching.
+func (l *NATPacketListener) IsFallback() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.fallback
 }
 
 // PacketConn returns the underlying packet connection.

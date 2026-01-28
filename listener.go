@@ -73,3 +73,59 @@ func ListenContext(ctx context.Context, port int) (*NATListener, error) {
 
 	return natListener, nil
 }
+
+// ListenWithFallback creates a TCP listener with NAT traversal on the specified port.
+// If NAT traversal fails (UPnP and NAT-PMP both unavailable), it falls back to a
+// standard net.Listener without NAT hole-punching.
+// This is a convenience wrapper around ListenWithFallbackContext using context.Background().
+func ListenWithFallback(port int) (*NATListener, error) {
+	return ListenWithFallbackContext(context.Background(), port)
+}
+
+// ListenWithFallbackContext creates a TCP listener with NAT traversal on the specified port.
+// If NAT traversal fails (UPnP and NAT-PMP both unavailable), it falls back to a
+// standard net.Listener without NAT hole-punching.
+// The context can be used to cancel the discovery and mapping operations.
+// Once the listener is created, the context is no longer used - use Close() to stop the listener.
+//
+// When fallback is used:
+//   - ExternalPort() returns the same as the internal port
+//   - Addr() returns a NATAddr where internal and external addresses are the same
+//   - No port renewal is performed (the renewal manager is nil)
+//   - IsFallback() returns true
+func ListenWithFallbackContext(ctx context.Context, port int) (*NATListener, error) {
+	// Check context before starting
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled before starting: %w", err)
+	}
+
+	// Try NAT traversal first
+	natListener, err := ListenContext(ctx, port)
+	if err == nil {
+		return natListener, nil
+	}
+
+	// Check context before fallback
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled after NAT attempt: %w", err)
+	}
+
+	// NAT traversal failed, fall back to standard listener
+	listener, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if listenErr != nil {
+		return nil, fmt.Errorf("failed to create fallback listener: %w (NAT error: %v)", listenErr, err)
+	}
+
+	// For fallback, internal and external addresses are the same (local address)
+	internalAddr := listener.Addr().String()
+	addr := NewNATAddr("tcp", internalAddr, internalAddr)
+
+	return &NATListener{
+		listener:     listener,
+		renewal:      nil, // No renewal for fallback
+		externalPort: port,
+		externalIP:   "", // Unknown external IP in fallback mode
+		addr:         addr,
+		fallback:     true,
+	}, nil
+}

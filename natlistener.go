@@ -15,6 +15,7 @@ type NATListener struct {
 	externalIP   string
 	addr         *NATAddr
 	closed       bool
+	fallback     bool // true if NAT traversal failed and we're using a standard listener
 	mu           sync.Mutex
 }
 
@@ -62,7 +63,9 @@ func (l *NATListener) Close() error {
 	}
 	l.closed = true
 
-	l.renewal.Stop()
+	if l.renewal != nil {
+		l.renewal.Stop()
+	}
 	return l.listener.Close()
 }
 
@@ -75,8 +78,17 @@ func (l *NATListener) Addr() net.Addr {
 
 // ExternalPort returns the external port number assigned by the NAT device.
 // This value may change if the NAT device assigns a different port during renewal.
+// In fallback mode, this returns the same as the internal port.
 func (l *NATListener) ExternalPort() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.externalPort
+}
+
+// IsFallback returns true if NAT traversal failed and the listener is using
+// a standard net.Listener without NAT hole-punching.
+func (l *NATListener) IsFallback() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.fallback
 }
