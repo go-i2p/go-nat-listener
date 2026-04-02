@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
+	"github.com/go-i2p/logger"
 )
 
 // NATPacketListener implements a packet listener with NAT traversal.
@@ -27,6 +29,7 @@ func (l *NATPacketListener) updateExternalPort(newPort int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	oldPort := l.externalPort
 	l.externalPort = newPort
 	// Recreate NATAddr with the new external port
 	newExternalAddr := fmt.Sprintf("%s:%d", l.externalIP, newPort)
@@ -36,6 +39,10 @@ func (l *NATPacketListener) updateExternalPort(newPort int) {
 	if l.cachedPacketConn != nil {
 		l.cachedPacketConn.localAddr = l.addr
 	}
+	log.WithFields(logger.Fields{
+		"oldPort": oldPort,
+		"newPort": newPort,
+	}).Debug("UDP packet listener external port updated")
 }
 
 // Accept returns a packet connection (satisfies a hypothetical net.PacketListener interface).
@@ -65,6 +72,11 @@ func (l *NATPacketListener) Close() error {
 		return nil
 	}
 	l.closed = true
+
+	log.WithFields(logger.Fields{
+		"addr":     l.addr.String(),
+		"fallback": l.fallback,
+	}).Debug("closing UDP packet listener")
 
 	if l.renewal != nil {
 		l.renewal.Stop()

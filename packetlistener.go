@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+
+	"github.com/go-i2p/logger"
 )
 
 // ListenPacket creates a UDP packet listener with NAT traversal on the specified port.
@@ -108,6 +110,8 @@ func ListenPacketWithFallback(port int) (*NATPacketListener, error) {
 //   - No port renewal is performed (the renewal manager is nil)
 //   - IsFallback() returns true
 func ListenPacketWithFallbackContext(ctx context.Context, port int) (*NATPacketListener, error) {
+	log.WithField("port", port).Debug("creating NAT UDP packet listener with fallback")
+
 	// Check context before starting
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled before starting: %w", err)
@@ -119,6 +123,8 @@ func ListenPacketWithFallbackContext(ctx context.Context, port int) (*NATPacketL
 		return natPacketListener, nil
 	}
 
+	log.WithError(err).WithField("port", port).Warn("NAT traversal failed, falling back to standard UDP packet listener")
+
 	// Check context before fallback
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled after NAT attempt: %w", err)
@@ -127,12 +133,18 @@ func ListenPacketWithFallbackContext(ctx context.Context, port int) (*NATPacketL
 	// NAT traversal failed, fall back to standard packet listener
 	conn, listenErr := net.ListenPacket("udp", fmt.Sprintf(":%d", port))
 	if listenErr != nil {
+		log.WithError(listenErr).WithField("port", port).Error("fallback UDP packet listener creation failed")
 		return nil, fmt.Errorf("failed to create fallback packet listener: %w (NAT error: %v)", listenErr, err)
 	}
 
 	// For fallback, internal and external addresses are the same (local address)
 	internalAddr := conn.LocalAddr().String()
 	addr := NewNATAddr("udp", internalAddr, internalAddr)
+
+	log.WithFields(logger.Fields{
+		"port":         port,
+		"internalAddr": internalAddr,
+	}).Info("UDP packet listener started in fallback mode (no NAT traversal)")
 
 	return &NATPacketListener{
 		conn:         conn,

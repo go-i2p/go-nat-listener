@@ -2,6 +2,8 @@ package nattraversal
 
 import (
 	"context"
+
+	"github.com/go-i2p/logger"
 )
 
 // createTCPMapping establishes a TCP port mapping.
@@ -13,12 +15,15 @@ func createTCPMapping(port int) (PortMapper, int, error) {
 // createTCPMappingContext establishes a TCP port mapping with context support.
 // The context is checked before and after the discovery and mapping operations.
 func createTCPMappingContext(ctx context.Context, port int) (PortMapper, int, error) {
+	log.WithField("port", port).Debug("creating TCP port mapping")
+
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 
 	mapper, err := NewPortMapperContext(ctx)
 	if err != nil {
+		log.WithError(err).WithField("port", port).Error("failed to create port mapper for TCP")
 		return nil, 0, err
 	}
 
@@ -28,9 +33,18 @@ func createTCPMappingContext(ctx context.Context, port int) (PortMapper, int, er
 
 	externalPort, err := mapper.MapPort("TCP", port, mappingDuration)
 	if err != nil {
+		log.WithError(err).WithFields(logger.Fields{
+			"port":     port,
+			"protocol": "TCP",
+		}).Error("TCP port mapping failed")
 		return nil, 0, err
 	}
 
+	log.WithFields(logger.Fields{
+		"internalPort": port,
+		"externalPort": externalPort,
+		"protocol":     "TCP",
+	}).Debug("TCP port mapping established")
 	return mapper, externalPort, nil
 }
 
@@ -43,12 +57,15 @@ func createUDPMapping(port int) (PortMapper, int, error) {
 // createUDPMappingContext establishes a UDP port mapping with context support.
 // The context is checked before and after the discovery and mapping operations.
 func createUDPMappingContext(ctx context.Context, port int) (PortMapper, int, error) {
+	log.WithField("port", port).Debug("creating UDP port mapping")
+
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 
 	mapper, err := NewPortMapperContext(ctx)
 	if err != nil {
+		log.WithError(err).WithField("port", port).Error("failed to create port mapper for UDP")
 		return nil, 0, err
 	}
 
@@ -58,9 +75,18 @@ func createUDPMappingContext(ctx context.Context, port int) (PortMapper, int, er
 
 	externalPort, err := mapper.MapPort("UDP", port, mappingDuration)
 	if err != nil {
+		log.WithError(err).WithFields(logger.Fields{
+			"port":     port,
+			"protocol": "UDP",
+		}).Error("UDP port mapping failed")
 		return nil, 0, err
 	}
 
+	log.WithFields(logger.Fields{
+		"internalPort": port,
+		"externalPort": externalPort,
+		"protocol":     "UDP",
+	}).Debug("UDP port mapping established")
 	return mapper, externalPort, nil
 }
 

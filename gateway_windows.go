@@ -12,12 +12,15 @@ import (
 // readDefaultGateway reads the default gateway using `route print` on Windows.
 // Returns nil, nil if the gateway cannot be determined (will use fallback).
 func readDefaultGateway() (net.IP, error) {
+	log.Debug("reading default gateway via route print (Windows)")
+
 	// Use route print to get the routing table
 	// Filter for 0.0.0.0 to find default route
 	cmd := exec.Command("route", "print", "0.0.0.0")
 	output, err := cmd.Output()
 	if err != nil {
 		// Command failed, use fallback
+		log.WithError(err).Debug("route print command failed, will use fallback")
 		return nil, nil
 	}
 
@@ -85,10 +88,12 @@ func parseWindowsRouteOutput(output string) (net.IP, error) {
 
 			gateway := net.ParseIP(gatewayStr)
 			if gateway != nil && gateway.To4() != nil {
+				log.WithField("gateway", gateway.To4().String()).Debug("default gateway found via route print (Windows)")
 				return gateway.To4(), nil
 			}
 		}
 	}
 
+	log.Debug("no default gateway found via route print (Windows)")
 	return nil, nil // No default gateway found, use fallback
 }

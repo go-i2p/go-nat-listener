@@ -13,6 +13,8 @@ import (
 // This includes macOS (darwin), FreeBSD, OpenBSD, NetBSD, and DragonFly BSD.
 // Returns nil, nil if the gateway cannot be determined (will use fallback).
 func readDefaultGateway() (net.IP, error) {
+	log.Debug("reading default gateway via netstat (BSD)")
+
 	// Use netstat -rn to get the routing table
 	// -r: show routing table
 	// -n: show numerical addresses (don't resolve hostnames)
@@ -20,6 +22,7 @@ func readDefaultGateway() (net.IP, error) {
 	output, err := cmd.Output()
 	if err != nil {
 		// Command failed, use fallback
+		log.WithError(err).Debug("netstat command failed, will use fallback")
 		return nil, nil
 	}
 
@@ -61,10 +64,12 @@ func parseNetstatOutput(output string) (net.IP, error) {
 
 			gateway := net.ParseIP(gatewayStr)
 			if gateway != nil && gateway.To4() != nil {
+				log.WithField("gateway", gateway.To4().String()).Debug("default gateway found via netstat (BSD)")
 				return gateway.To4(), nil
 			}
 		}
 	}
 
+	log.Debug("no default gateway found via netstat (BSD)")
 	return nil, nil // No default gateway found, use fallback
 }
