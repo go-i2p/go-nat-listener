@@ -6,6 +6,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/go-i2p/logger"
 )
 
 // MockPortMapper implements PortMapper interface for testing
@@ -43,6 +45,7 @@ const (
 
 // NewMockPortMapper creates a new mock port mapper
 func NewMockPortMapper() *MockPortMapper {
+	log.Debug("creating mock port mapper")
 	return &MockPortMapper{
 		mappings:       make(map[string]*PortMapping),
 		externalIP:     "203.0.113.100", // RFC5737 test IP
@@ -58,6 +61,7 @@ func NewMockPortMapper() *MockPortMapper {
 func (m *MockPortMapper) SetRandomSeed(seed int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("seed", seed).Debug("mock: random seed configured")
 	m.rng = rand.New(rand.NewSource(seed))
 }
 
@@ -65,6 +69,7 @@ func (m *MockPortMapper) SetRandomSeed(seed int64) {
 func (m *MockPortMapper) SetExternalIP(ip string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("ip", ip).Debug("mock: external IP configured")
 	m.externalIP = ip
 }
 
@@ -72,6 +77,7 @@ func (m *MockPortMapper) SetExternalIP(ip string) {
 func (m *MockPortMapper) SetLatency(d time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("latency", d.String()).Debug("mock: latency configured")
 	m.latency = d
 }
 
@@ -79,6 +85,7 @@ func (m *MockPortMapper) SetLatency(d time.Duration) {
 func (m *MockPortMapper) SetFailureRate(rate float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("rate", rate).Debug("mock: failure rate configured")
 	m.failureRate = rate
 }
 
@@ -86,6 +93,7 @@ func (m *MockPortMapper) SetFailureRate(rate float64) {
 func (m *MockPortMapper) SetPortExhaustion(exhausted bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("exhausted", exhausted).Debug("mock: port exhaustion configured")
 	m.portExhaustion = exhausted
 }
 
@@ -93,6 +101,7 @@ func (m *MockPortMapper) SetPortExhaustion(exhausted bool) {
 func (m *MockPortMapper) SetNATType(natType NATType) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("natType", natType).Debug("mock: NAT type configured")
 	m.natType = natType
 }
 
@@ -100,6 +109,7 @@ func (m *MockPortMapper) SetNATType(natType NATType) {
 func (m *MockPortMapper) SetProtocolSupport(upnp, natpmp bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("upnp", upnp).WithField("natpmp", natpmp).Debug("mock: protocol support configured")
 	m.supportsUPnP = upnp
 	m.supportsNATPMP = natpmp
 }
@@ -109,6 +119,12 @@ func (m *MockPortMapper) MapPort(protocol string, internalPort int, duration tim
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"internalPort": internalPort,
+		"duration":     duration.String(),
+	}).Debug("mock: MapPort called")
+
 	// Simulate latency
 	if m.latency > 0 {
 		time.Sleep(m.latency)
@@ -116,26 +132,40 @@ func (m *MockPortMapper) MapPort(protocol string, internalPort int, duration tim
 
 	// Simulate failure rate
 	if m.failureRate > 0 && m.shouldFail() {
+		log.WithFields(logger.Fields{
+			"protocol":     protocol,
+			"internalPort": internalPort,
+		}).Warn("mock: simulated random failure in MapPort")
 		return 0, fmt.Errorf("mock: random failure occurred")
 	}
 
 	// Validate port range (matching real implementation behavior)
 	if internalPort < 1 || internalPort > 65535 {
+		log.WithFields(logger.Fields{
+			"protocol":     protocol,
+			"internalPort": internalPort,
+		}).Error("mock: invalid port number in MapPort")
 		return 0, fmt.Errorf("mock: invalid port number: %d (must be 1-65535)", internalPort)
 	}
 
 	// Validate protocol
 	if protocol != "TCP" && protocol != "UDP" {
+		log.WithField("protocol", protocol).Error("mock: unsupported protocol in MapPort")
 		return 0, fmt.Errorf("mock: unsupported protocol: %s", protocol)
 	}
 
 	// Check protocol support
 	if !m.supportsUPnP && !m.supportsNATPMP {
+		log.Warn("mock: no protocols supported in MapPort")
 		return 0, fmt.Errorf("mock: no protocols supported")
 	}
 
 	// Simulate port exhaustion
 	if m.portExhaustion {
+		log.WithFields(logger.Fields{
+			"protocol":     protocol,
+			"internalPort": internalPort,
+		}).Warn("mock: simulated port exhaustion in MapPort")
 		return 0, fmt.Errorf("mock: no available ports")
 	}
 
@@ -151,6 +181,11 @@ func (m *MockPortMapper) MapPort(protocol string, internalPort int, duration tim
 		Active:       true,
 	}
 
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"internalPort": internalPort,
+		"externalPort": externalPort,
+	}).Debug("mock: port mapped successfully")
 	return externalPort, nil
 }
 
@@ -159,6 +194,11 @@ func (m *MockPortMapper) UnmapPort(protocol string, externalPort int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"externalPort": externalPort,
+	}).Debug("mock: UnmapPort called")
+
 	// Simulate latency
 	if m.latency > 0 {
 		time.Sleep(m.latency)
@@ -166,11 +206,19 @@ func (m *MockPortMapper) UnmapPort(protocol string, externalPort int) error {
 
 	// Simulate failure rate
 	if m.failureRate > 0 && m.shouldFail() {
+		log.WithFields(logger.Fields{
+			"protocol":     protocol,
+			"externalPort": externalPort,
+		}).Warn("mock: simulated random failure in UnmapPort")
 		return fmt.Errorf("mock: random failure occurred")
 	}
 
 	// Validate port range (matching real implementation behavior)
 	if externalPort < 1 || externalPort > 65535 {
+		log.WithFields(logger.Fields{
+			"protocol":     protocol,
+			"externalPort": externalPort,
+		}).Error("mock: invalid port number in UnmapPort")
 		return fmt.Errorf("mock: invalid port number: %d (must be 1-65535)", externalPort)
 	}
 
@@ -180,6 +228,10 @@ func (m *MockPortMapper) UnmapPort(protocol string, externalPort int) error {
 		delete(m.mappings, key)
 	}
 
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"externalPort": externalPort,
+	}).Debug("mock: port unmapped")
 	return nil
 }
 
@@ -195,9 +247,11 @@ func (m *MockPortMapper) GetExternalIP() (string, error) {
 
 	// Simulate failure rate
 	if m.failureRate > 0 && m.shouldFail() {
+		log.Warn("mock: simulated random failure in GetExternalIP")
 		return "", fmt.Errorf("mock: random failure occurred")
 	}
 
+	log.WithField("externalIP", m.externalIP).Debug("mock: returning external IP")
 	return m.externalIP, nil
 }
 
@@ -220,6 +274,7 @@ func (m *MockPortMapper) ExpireMapping(protocol string, externalPort int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	log.WithField("protocol", protocol).WithField("externalPort", externalPort).Debug("mock: expiring port mapping")
 	key := fmt.Sprintf("%s:%d", protocol, externalPort)
 	if mapping, exists := m.mappings[key]; exists {
 		mapping.ExpiresAt = time.Now().Add(-time.Second)
@@ -231,6 +286,7 @@ func (m *MockPortMapper) SimulateMappingChange(protocol string, oldPort, newPort
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	log.WithField("protocol", protocol).WithField("oldPort", oldPort).WithField("newPort", newPort).Debug("mock: simulating port mapping change")
 	oldKey := fmt.Sprintf("%s:%d", protocol, oldPort)
 	newKey := fmt.Sprintf("%s:%d", protocol, newPort)
 
@@ -279,6 +335,7 @@ type MockRenewalManager struct {
 
 // NewMockRenewalManager creates a new mock renewal manager
 func NewMockRenewalManager() *MockRenewalManager {
+	log.Debug("creating mock renewal manager")
 	return &MockRenewalManager{
 		renewalInterval: 100 * time.Millisecond, // Fast for testing
 	}
@@ -288,6 +345,7 @@ func NewMockRenewalManager() *MockRenewalManager {
 func (m *MockRenewalManager) SetShouldFail(fail bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.WithField("shouldFail", fail).Debug("mock: renewal failure configured")
 	m.shouldFail = fail
 }
 
@@ -325,6 +383,7 @@ type MockNetworkConditions struct {
 
 // NewMockNetworkConditions creates default network conditions
 func NewMockNetworkConditions() *MockNetworkConditions {
+	log.Debug("creating mock network conditions")
 	return &MockNetworkConditions{
 		PacketLoss: 0.0,
 		Latency:    10 * time.Millisecond,
@@ -336,6 +395,7 @@ func NewMockNetworkConditions() *MockNetworkConditions {
 
 // SetRandomSeed sets a custom random seed for reproducible tests.
 func (m *MockNetworkConditions) SetRandomSeed(seed int64) {
+	log.WithField("seed", seed).Debug("mock: network conditions random seed set")
 	m.rng = rand.New(rand.NewSource(seed))
 }
 
@@ -371,6 +431,7 @@ type MockFirewall struct {
 
 // NewMockFirewall creates a new mock firewall
 func NewMockFirewall() *MockFirewall {
+	log.Debug("creating mock firewall")
 	return &MockFirewall{
 		blockedPorts:  make(map[int]bool),
 		blockedIPs:    make(map[string]bool),
@@ -383,6 +444,7 @@ func NewMockFirewall() *MockFirewall {
 func (f *MockFirewall) BlockPort(port int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	log.WithField("port", port).Debug("mock: firewall blocking port")
 	f.blockedPorts[port] = true
 }
 
@@ -390,6 +452,7 @@ func (f *MockFirewall) BlockPort(port int) {
 func (f *MockFirewall) BlockIP(ip string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	log.WithField("ip", ip).Debug("mock: firewall blocking IP")
 	f.blockedIPs[ip] = true
 }
 
@@ -397,6 +460,7 @@ func (f *MockFirewall) BlockIP(ip string) {
 func (f *MockFirewall) AllowConnection(ip string, port int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	log.WithField("ip", ip).WithField("port", port).Debug("mock: firewall allowing connection")
 	f.allowedPairs[fmt.Sprintf("%s:%d", ip, port)] = true
 }
 
@@ -404,6 +468,7 @@ func (f *MockFirewall) AllowConnection(ip string, port int) {
 func (f *MockFirewall) SetDefaultPolicy(allow bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	log.WithField("allow", allow).Debug("mock: firewall default policy set")
 	f.defaultPolicy = allow
 }
 
@@ -435,6 +500,7 @@ func (f *MockFirewall) IsBlocked(ip string, port int) bool {
 func (f *MockFirewall) Reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	log.Debug("mock: firewall reset")
 	f.blockedPorts = make(map[int]bool)
 	f.blockedIPs = make(map[string]bool)
 	f.allowedPairs = make(map[string]bool)
@@ -455,6 +521,7 @@ type MockUDPConn struct {
 
 // NewMockUDPConn creates a new mock UDP connection
 func NewMockUDPConn(localAddr, remoteAddr *net.UDPAddr) *MockUDPConn {
+	log.WithField("localAddr", localAddr.String()).WithField("remoteAddr", remoteAddr.String()).Debug("creating mock UDP connection")
 	return &MockUDPConn{
 		localAddr:   localAddr,
 		remoteAddr:  remoteAddr,
@@ -529,6 +596,7 @@ func (c *MockUDPConn) Write(b []byte) (n int, err error) {
 func (c *MockUDPConn) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	log.Debug("mock: closing UDP connection")
 	c.closed = true
 	return nil
 }

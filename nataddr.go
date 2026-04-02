@@ -1,5 +1,7 @@
 package nattraversal
 
+import "github.com/go-i2p/logger"
+
 // NATAddr represents a network address with NAT traversal information.
 // Moved from: addr.go
 type NATAddr struct {
@@ -10,6 +12,11 @@ type NATAddr struct {
 
 // NewNATAddr creates a new NATAddr with internal and external addresses.
 func NewNATAddr(network, internalAddr, externalAddr string) *NATAddr {
+	log.WithFields(logger.Fields{
+		"network":      network,
+		"internalAddr": internalAddr,
+		"externalAddr": externalAddr,
+	}).Debug("creating NATAddr")
 	return &NATAddr{
 		network:      network,
 		internalAddr: internalAddr,

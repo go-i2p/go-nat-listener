@@ -129,6 +129,7 @@ func (l *NATPacketListener) PacketConn() net.PacketConn {
 // Must be called with l.mu held.
 func (l *NATPacketListener) getOrCreatePacketConn() *NATPacketConn {
 	if l.cachedPacketConn == nil {
+		log.WithField("addr", l.addr.String()).Debug("creating NATPacketConn wrapper")
 		l.cachedPacketConn = &NATPacketConn{
 			PacketConn: l.conn,
 			localAddr:  l.addr,

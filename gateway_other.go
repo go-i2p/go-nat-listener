@@ -14,7 +14,6 @@ import "net"
 // - js/wasm
 // - Other less common platforms
 func readDefaultGateway() (net.IP, error) {
-	// No platform-specific implementation available
-	// The discoverGateway function will use discoverGatewayFallback()
+	log.Debug("platform has no native gateway detection, returning nil to trigger fallback discovery")
 	return nil, nil
 }

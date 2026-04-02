@@ -27,12 +27,20 @@ func (c *NATPacketConn) LocalAddr() net.Addr {
 
 // ReadFrom reads a packet from the connection.
 func (c *NATPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	return c.PacketConn.ReadFrom(p)
+	n, addr, err = c.PacketConn.ReadFrom(p)
+	if err != nil {
+		log.WithError(err).Debug("NAT packet conn read error")
+	}
+	return n, addr, err
 }
 
 // WriteTo writes a packet to the connection.
 func (c *NATPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	return c.PacketConn.WriteTo(p, addr)
+	n, err = c.PacketConn.WriteTo(p, addr)
+	if err != nil {
+		log.WithError(err).WithField("addr", addr.String()).Error("NAT packet conn write error")
+	}
+	return n, err
 }
 
 // Close closes the connection.
@@ -40,22 +48,38 @@ func (c *NATPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 // only close the underlying connection once, returning the same error.
 func (c *NATPacketConn) Close() error {
 	c.closeOnce.Do(func() {
+		log.WithField("addr", c.localAddr.String()).Debug("closing NAT packet connection")
 		c.closeErr = c.PacketConn.Close()
+		if c.closeErr != nil {
+			log.WithError(c.closeErr).Error("error closing NAT packet connection")
+		}
 	})
 	return c.closeErr
 }
 
 // SetDeadline sets the read and write deadlines.
 func (c *NATPacketConn) SetDeadline(t time.Time) error {
-	return c.PacketConn.SetDeadline(t)
+	err := c.PacketConn.SetDeadline(t)
+	if err != nil {
+		log.WithError(err).Debug("failed to set deadline on NAT packet conn")
+	}
+	return err
 }
 
 // SetReadDeadline sets the deadline for future ReadFrom calls.
 func (c *NATPacketConn) SetReadDeadline(t time.Time) error {
-	return c.PacketConn.SetReadDeadline(t)
+	err := c.PacketConn.SetReadDeadline(t)
+	if err != nil {
+		log.WithError(err).Debug("failed to set read deadline on NAT packet conn")
+	}
+	return err
 }
 
 // SetWriteDeadline sets the deadline for future WriteTo calls.
 func (c *NATPacketConn) SetWriteDeadline(t time.Time) error {
-	return c.PacketConn.SetWriteDeadline(t)
+	err := c.PacketConn.SetWriteDeadline(t)
+	if err != nil {
+		log.WithError(err).Debug("failed to set write deadline on NAT packet conn")
+	}
+	return err
 }

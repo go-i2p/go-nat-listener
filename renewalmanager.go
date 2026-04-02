@@ -47,6 +47,17 @@ func NewRenewalManager(mapper PortMapper, protocol string, internalPort, externa
 func (r *RenewalManager) SetPortChangeCallback(callback PortChangeCallback) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if callback != nil {
+		log.WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"port":     r.externalPort,
+		}).Debug("port change callback registered")
+	} else {
+		log.WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"port":     r.externalPort,
+		}).Debug("port change callback cleared")
+	}
 	r.onPortChange = callback
 }
 

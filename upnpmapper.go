@@ -218,8 +218,10 @@ func (u *UPnPMapper) GetExternalIP() (string, error) {
 
 // getLocalIP discovers the local IP address for port mapping.
 func (u *UPnPMapper) getLocalIP() (string, error) {
+	log.Debug("discovering local IP for UPnP port mapping")
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
+		log.WithError(err).Error("failed to dial for local IP discovery")
 		return "", err
 	}
 	defer conn.Close()
@@ -229,5 +231,6 @@ func (u *UPnPMapper) getLocalIP() (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unexpected local address type: %T", conn.LocalAddr())
 	}
+	log.WithField("localIP", localAddr.IP.String()).Debug("local IP discovered for UPnP")
 	return localAddr.IP.String(), nil
 }
