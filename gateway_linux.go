@@ -15,12 +15,16 @@ import (
 // Returns nil, nil if the file doesn't exist or no default route is found.
 // Returns nil, error if the file exists but cannot be parsed.
 func readDefaultGateway() (net.IP, error) {
+	log.Debug("reading default gateway from /proc/net/route")
+
 	file, err := os.Open("/proc/net/route")
 	if err != nil {
 		// File doesn't exist - not an error, use fallback
 		if os.IsNotExist(err) {
+			log.Debug("/proc/net/route not found, will use fallback")
 			return nil, nil
 		}
+		log.WithError(err).Error("failed to open /proc/net/route")
 		return nil, fmt.Errorf("failed to open routing table: %w", err)
 	}
 	defer file.Close()
@@ -46,19 +50,23 @@ func readDefaultGateway() (net.IP, error) {
 		if destination == "00000000" {
 			gateway, err := parseHexIP(gatewayHex)
 			if err != nil {
+				log.WithError(err).WithField("hexGateway", gatewayHex).Error("failed to parse gateway from routing table")
 				return nil, fmt.Errorf("failed to parse gateway: %w", err)
 			}
 			// Skip if gateway is 0.0.0.0 (local route)
 			if !gateway.Equal(net.IPv4zero) {
+				log.WithField("gateway", gateway.String()).Debug("default gateway found in routing table")
 				return gateway, nil
 			}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
+		log.WithError(err).Error("error reading /proc/net/route")
 		return nil, fmt.Errorf("error reading routing table: %w", err)
 	}
 
+	log.Debug("no default gateway found in /proc/net/route")
 	return nil, nil // No default gateway found, use fallback
 }
 

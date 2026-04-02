@@ -1,9 +1,10 @@
 package nattraversal
 
 import (
-	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/go-i2p/logger"
 )
 
 // PortChangeCallback is called when the external port changes during renewal.
@@ -26,6 +27,11 @@ type RenewalManager struct {
 
 // NewRenewalManager creates a renewal manager for a port mapping.
 func NewRenewalManager(mapper PortMapper, protocol string, internalPort, externalPort int) *RenewalManager {
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"internalPort": internalPort,
+		"externalPort": externalPort,
+	}).Debug("creating renewal manager")
 	return &RenewalManager{
 		mapper:       mapper,
 		protocol:     protocol,
@@ -60,12 +66,23 @@ func (r *RenewalManager) Start() {
 	defer r.mu.Unlock()
 
 	if r.started {
+		log.WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"port":     r.externalPort,
+		}).Debug("renewal manager already started, ignoring")
 		return
 	}
 
 	r.started = true
 	r.done = make(chan struct{})
 	r.ticker = time.NewTicker(renewalInterval)
+
+	log.WithFields(logger.Fields{
+		"protocol":        r.protocol,
+		"internalPort":    r.internalPort,
+		"externalPort":    r.externalPort,
+		"renewalInterval": renewalInterval.String(),
+	}).Debug("starting port renewal")
 
 	// Capture local references to avoid data race between goroutine reads
 	// and subsequent Start() writes after Stop() is called.
@@ -80,8 +97,17 @@ func (r *RenewalManager) Stop() {
 	defer r.mu.Unlock()
 
 	if !r.started {
+		log.WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"port":     r.externalPort,
+		}).Debug("renewal manager already stopped, ignoring")
 		return
 	}
+
+	log.WithFields(logger.Fields{
+		"protocol": r.protocol,
+		"port":     r.externalPort,
+	}).Debug("stopping port renewal manager")
 
 	r.started = false
 	close(r.done)
@@ -90,10 +116,15 @@ func (r *RenewalManager) Stop() {
 	// Unmap the port
 	err := r.mapper.UnmapPort(r.protocol, r.externalPort)
 	if err != nil {
-		slog.Warn("failed to unmap port during shutdown",
-			"protocol", r.protocol,
-			"port", r.externalPort,
-			"error", err)
+		log.WithError(err).WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"port":     r.externalPort,
+		}).Warn("failed to unmap port during shutdown")
+	} else {
+		log.WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"port":     r.externalPort,
+		}).Debug("port unmapped successfully during shutdown")
 	}
 }
 
@@ -115,12 +146,17 @@ func (r *RenewalManager) renewLoop(tickerC <-chan time.Time, done <-chan struct{
 // If the NAT device assigns a different external port during renewal,
 // the callback (if set) will be invoked with the new port number.
 func (r *RenewalManager) renew() {
+	log.WithFields(logger.Fields{
+		"protocol": r.protocol,
+		"port":     r.externalPort,
+	}).Debug("attempting port mapping renewal")
+
 	newPort, err := r.mapper.MapPort(r.protocol, r.internalPort, mappingDuration)
 	if err != nil {
-		slog.Warn("port mapping renewal failed",
-			"protocol", r.protocol,
-			"port", r.externalPort,
-			"error", err)
+		log.WithError(err).WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"port":     r.externalPort,
+		}).Warn("port mapping renewal failed")
 		return
 	}
 
@@ -129,10 +165,11 @@ func (r *RenewalManager) renew() {
 	callback := r.onPortChange
 	if newPort != oldPort {
 		r.externalPort = newPort
-		slog.Info("external port changed during renewal",
-			"protocol", r.protocol,
-			"oldPort", oldPort,
-			"newPort", newPort)
+		log.WithFields(logger.Fields{
+			"protocol": r.protocol,
+			"oldPort":  oldPort,
+			"newPort":  newPort,
+		}).Info("external port changed during renewal")
 	}
 	r.mu.Unlock()
 
@@ -141,7 +178,8 @@ func (r *RenewalManager) renew() {
 		callback(newPort)
 	}
 
-	slog.Debug("port mapping renewed",
-		"protocol", r.protocol,
-		"port", newPort)
+	log.WithFields(logger.Fields{
+		"protocol": r.protocol,
+		"port":     newPort,
+	}).Debug("port mapping renewed successfully")
 }

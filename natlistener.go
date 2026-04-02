@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
+	"github.com/go-i2p/logger"
 )
 
 // NATListener implements net.Listener with automatic NAT traversal.
@@ -25,10 +27,15 @@ func (l *NATListener) updateExternalPort(newPort int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	oldPort := l.externalPort
 	l.externalPort = newPort
 	// Recreate NATAddr with the new external port
 	newExternalAddr := fmt.Sprintf("%s:%d", l.externalIP, newPort)
 	l.addr = NewNATAddr(l.addr.Network(), l.addr.InternalAddr(), newExternalAddr)
+	log.WithFields(logger.Fields{
+		"oldPort": oldPort,
+		"newPort": newPort,
+	}).Debug("TCP listener external port updated")
 }
 
 // Accept waits for and returns the next connection to the listener.
@@ -43,8 +50,14 @@ func (l *NATListener) Accept() (net.Conn, error) {
 
 	conn, err := l.listener.Accept()
 	if err != nil {
+		log.WithError(err).Debug("TCP listener accept error")
 		return nil, err
 	}
+
+	log.WithFields(logger.Fields{
+		"remoteAddr": conn.RemoteAddr().String(),
+		"localAddr":  l.addr.String(),
+	}).Debug("accepted new TCP connection")
 
 	return &NATConn{
 		Conn:       conn,
@@ -63,10 +76,19 @@ func (l *NATListener) Close() error {
 	}
 	l.closed = true
 
+	log.WithFields(logger.Fields{
+		"addr":     l.addr.String(),
+		"fallback": l.fallback,
+	}).Debug("closing TCP listener")
+
 	if l.renewal != nil {
 		l.renewal.Stop()
 	}
-	return l.listener.Close()
+	err := l.listener.Close()
+	if err != nil {
+		log.WithError(err).Error("error closing TCP listener")
+	}
+	return err
 }
 
 // Addr returns the listener's network address.

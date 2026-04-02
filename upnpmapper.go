@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/go-i2p/logger"
 	"github.com/huin/goupnp/dcps/internetgateway2"
 )
 
@@ -47,6 +48,8 @@ func NewUPnPMapper() (*UPnPMapper, error) {
 // It attempts discovery in order of preference: WANIPConnection2, WANIPConnection1,
 // then WANPPPConnection1, using the first service that responds with available devices.
 func NewUPnPMapperContext(ctx context.Context) (*UPnPMapper, error) {
+	log.Debug("starting UPnP discovery")
+
 	// Check context before starting
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
@@ -54,7 +57,10 @@ func NewUPnPMapperContext(ctx context.Context) (*UPnPMapper, error) {
 
 	// Try WANIPConnection2 first (newest, most feature-rich)
 	if client, err := discoverWANIPConnection2Ctx(ctx); err == nil {
+		log.Debug("UPnP WANIPConnection2 device discovered")
 		return &UPnPMapper{client: client}, nil
+	} else {
+		log.WithError(err).Debug("WANIPConnection2 discovery failed")
 	}
 
 	// Check context between attempts
@@ -64,7 +70,10 @@ func NewUPnPMapperContext(ctx context.Context) (*UPnPMapper, error) {
 
 	// Try WANIPConnection1 (common on cable/fiber routers)
 	if client, err := discoverWANIPConnection1Ctx(ctx); err == nil {
+		log.Debug("UPnP WANIPConnection1 device discovered")
 		return &UPnPMapper{client: client}, nil
+	} else {
+		log.WithError(err).Debug("WANIPConnection1 discovery failed")
 	}
 
 	// Check context between attempts
@@ -74,7 +83,10 @@ func NewUPnPMapperContext(ctx context.Context) (*UPnPMapper, error) {
 
 	// Try WANPPPConnection1 (PPPoE routers like DSL)
 	if client, err := discoverWANPPPConnection1Ctx(ctx); err == nil {
+		log.Debug("UPnP WANPPPConnection1 device discovered")
 		return &UPnPMapper{client: client}, nil
+	} else {
+		log.WithError(err).Debug("WANPPPConnection1 discovery failed")
 	}
 
 	return nil, fmt.Errorf("no UPnP IGD devices found (tried WANIPConnection2, WANIPConnection1, WANPPPConnection1)")
@@ -118,6 +130,12 @@ func discoverWANPPPConnection1Ctx(ctx context.Context) (upnpClient, error) {
 
 // MapPort creates a port mapping via UPnP.
 func (u *UPnPMapper) MapPort(protocol string, internalPort int, duration time.Duration) (int, error) {
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"internalPort": internalPort,
+		"duration":     duration.String(),
+	}).Debug("mapping port via UPnP")
+
 	// Validate port range before uint16 cast to prevent silent overflow
 	if internalPort < 1 || internalPort > 65535 {
 		return 0, fmt.Errorf("invalid port number: %d (must be 1-65535)", internalPort)
@@ -125,6 +143,7 @@ func (u *UPnPMapper) MapPort(protocol string, internalPort int, duration time.Du
 
 	localIP, err := u.getLocalIP()
 	if err != nil {
+		log.WithError(err).Error("failed to get local IP for UPnP port mapping")
 		return 0, fmt.Errorf("failed to get local IP: %w", err)
 	}
 
@@ -141,14 +160,29 @@ func (u *UPnPMapper) MapPort(protocol string, internalPort int, duration time.Du
 		leaseDuration,        // lease duration
 	)
 	if err != nil {
+		log.WithError(err).WithFields(logger.Fields{
+			"protocol":     protocol,
+			"internalPort": internalPort,
+		}).Error("UPnP port mapping failed")
 		return 0, fmt.Errorf("UPnP port mapping failed: %w", err)
 	}
 
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"internalPort": internalPort,
+		"externalPort": internalPort,
+		"localIP":      localIP,
+	}).Debug("UPnP port mapped successfully")
 	return internalPort, nil
 }
 
 // UnmapPort removes a port mapping via UPnP.
 func (u *UPnPMapper) UnmapPort(protocol string, externalPort int) error {
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"externalPort": externalPort,
+	}).Debug("unmapping port via UPnP")
+
 	// Validate port range before uint16 cast to prevent silent overflow
 	if externalPort < 1 || externalPort > 65535 {
 		return fmt.Errorf("invalid port number: %d (must be 1-65535)", externalPort)
@@ -156,17 +190,29 @@ func (u *UPnPMapper) UnmapPort(protocol string, externalPort int) error {
 
 	err := u.client.DeletePortMapping("", uint16(externalPort), protocol)
 	if err != nil {
+		log.WithError(err).WithFields(logger.Fields{
+			"protocol":     protocol,
+			"externalPort": externalPort,
+		}).Error("UPnP port unmapping failed")
 		return fmt.Errorf("UPnP port unmapping failed: %w", err)
 	}
+
+	log.WithFields(logger.Fields{
+		"protocol":     protocol,
+		"externalPort": externalPort,
+	}).Debug("UPnP port unmapped successfully")
 	return nil
 }
 
 // GetExternalIP returns the external IP address via UPnP.
 func (u *UPnPMapper) GetExternalIP() (string, error) {
+	log.Debug("getting external IP via UPnP")
 	ip, err := u.client.GetExternalIPAddress()
 	if err != nil {
+		log.WithError(err).Error("UPnP external IP lookup failed")
 		return "", fmt.Errorf("UPnP external IP lookup failed: %w", err)
 	}
+	log.WithField("externalIP", ip).Debug("UPnP external IP retrieved")
 	return ip, nil
 }
 

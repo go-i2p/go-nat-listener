@@ -16,6 +16,8 @@ func NewPortMapper() (PortMapper, error) {
 // NewPortMapperContext creates a port mapper with context support, trying UPnP first, then NAT-PMP.
 // The context is passed through to the discovery process, allowing cancellation during slow network operations.
 func NewPortMapperContext(ctx context.Context) (PortMapper, error) {
+	log.Debug("discovering port mapper")
+
 	// Check context before starting
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
@@ -24,8 +26,11 @@ func NewPortMapperContext(ctx context.Context) (PortMapper, error) {
 	// Try UPnP first with context support
 	upnp, err := NewUPnPMapperContext(ctx)
 	if err == nil {
+		log.Debug("UPnP port mapper selected")
 		return upnp, nil
 	}
+
+	log.WithError(err).Debug("UPnP discovery failed, trying NAT-PMP")
 
 	// Check context before fallback
 	if err := ctx.Err(); err != nil {
@@ -35,8 +40,10 @@ func NewPortMapperContext(ctx context.Context) (PortMapper, error) {
 	// Fall back to NAT-PMP
 	natpmp, err := NewNATPMPMapper()
 	if err != nil {
+		log.WithError(err).Error("all NAT traversal protocols failed")
 		return nil, fmt.Errorf("no NAT traversal available: UPnP failed, NAT-PMP failed: %w", err)
 	}
 
+	log.Debug("NAT-PMP port mapper selected")
 	return natpmp, nil
 }

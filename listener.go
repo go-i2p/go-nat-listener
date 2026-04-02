@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+
+	"github.com/go-i2p/logger"
 )
 
 // Listen creates a TCP listener with NAT traversal on the specified port.
@@ -16,6 +18,8 @@ func Listen(port int) (*NATListener, error) {
 // The context can be used to cancel the discovery and mapping operations.
 // Once the listener is created, the context is no longer used - use Close() to stop the listener.
 func ListenContext(ctx context.Context, port int) (*NATListener, error) {
+	log.WithField("port", port).Debug("creating NAT TCP listener")
+
 	// Check context before starting
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled before starting: %w", err)
@@ -23,8 +27,14 @@ func ListenContext(ctx context.Context, port int) (*NATListener, error) {
 
 	mapper, externalPort, err := createTCPMappingContext(ctx, port)
 	if err != nil {
+		log.WithError(err).WithField("port", port).Error("failed to create TCP port mapping")
 		return nil, fmt.Errorf("failed to create port mapping: %w", err)
 	}
+
+	log.WithFields(logger.Fields{
+		"internalPort": port,
+		"externalPort": externalPort,
+	}).Debug("TCP port mapping created")
 
 	// Check context after mapping
 	if err := ctx.Err(); err != nil {
@@ -35,6 +45,7 @@ func ListenContext(ctx context.Context, port int) (*NATListener, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		mapper.UnmapPort("TCP", externalPort)
+		log.WithError(err).WithField("port", port).Error("failed to bind TCP listener")
 		return nil, fmt.Errorf("failed to create listener: %w", err)
 	}
 
@@ -51,6 +62,7 @@ func ListenContext(ctx context.Context, port int) (*NATListener, error) {
 	if err != nil {
 		listener.Close()
 		mapper.UnmapPort("TCP", externalPort)
+		log.WithError(err).WithField("port", port).Error("failed to get external IP for TCP listener")
 		return nil, fmt.Errorf("failed to get external IP: %w", err)
 	}
 
@@ -71,6 +83,10 @@ func ListenContext(ctx context.Context, port int) (*NATListener, error) {
 	renewal.SetPortChangeCallback(natListener.updateExternalPort)
 	renewal.Start()
 
+	log.WithFields(logger.Fields{
+		"internalAddr": internalAddr,
+		"externalAddr": externalAddr,
+	}).Debug("NAT TCP listener ready")
 	return natListener, nil
 }
 
@@ -94,6 +110,8 @@ func ListenWithFallback(port int) (*NATListener, error) {
 //   - No port renewal is performed (the renewal manager is nil)
 //   - IsFallback() returns true
 func ListenWithFallbackContext(ctx context.Context, port int) (*NATListener, error) {
+	log.WithField("port", port).Debug("creating NAT TCP listener with fallback")
+
 	// Check context before starting
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled before starting: %w", err)
@@ -105,6 +123,8 @@ func ListenWithFallbackContext(ctx context.Context, port int) (*NATListener, err
 		return natListener, nil
 	}
 
+	log.WithError(err).WithField("port", port).Warn("NAT traversal failed, falling back to standard TCP listener")
+
 	// Check context before fallback
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled after NAT attempt: %w", err)
@@ -113,12 +133,18 @@ func ListenWithFallbackContext(ctx context.Context, port int) (*NATListener, err
 	// NAT traversal failed, fall back to standard listener
 	listener, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if listenErr != nil {
+		log.WithError(listenErr).WithField("port", port).Error("fallback TCP listener creation failed")
 		return nil, fmt.Errorf("failed to create fallback listener: %w (NAT error: %v)", listenErr, err)
 	}
 
 	// For fallback, internal and external addresses are the same (local address)
 	internalAddr := listener.Addr().String()
 	addr := NewNATAddr("tcp", internalAddr, internalAddr)
+
+	log.WithFields(logger.Fields{
+		"port":         port,
+		"internalAddr": internalAddr,
+	}).Info("TCP listener started in fallback mode (no NAT traversal)")
 
 	return &NATListener{
 		listener:     listener,

@@ -16,6 +16,8 @@ func ListenPacket(port int) (*NATPacketListener, error) {
 // The context can be used to cancel the discovery and mapping operations.
 // Once the listener is created, the context is no longer used - use Close() to stop the listener.
 func ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, error) {
+	log.WithField("port", port).Debug("creating NAT UDP packet listener")
+
 	// Check context before starting
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled before starting: %w", err)
@@ -23,8 +25,14 @@ func ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, err
 
 	mapper, externalPort, err := createUDPMappingContext(ctx, port)
 	if err != nil {
+		log.WithError(err).WithField("port", port).Error("failed to create UDP port mapping")
 		return nil, fmt.Errorf("failed to create port mapping: %w", err)
 	}
+
+	log.WithFields(logger.Fields{
+		"internalPort": port,
+		"externalPort": externalPort,
+	}).Debug("UDP port mapping created")
 
 	// Check context after mapping
 	if err := ctx.Err(); err != nil {
@@ -35,6 +43,7 @@ func ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, err
 	conn, err := net.ListenPacket("udp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		mapper.UnmapPort("UDP", externalPort)
+		log.WithError(err).WithField("port", port).Error("failed to bind UDP packet conn")
 		return nil, fmt.Errorf("failed to create packet conn: %w", err)
 	}
 
@@ -51,6 +60,7 @@ func ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, err
 	if err != nil {
 		conn.Close()
 		mapper.UnmapPort("UDP", externalPort)
+		log.WithError(err).WithField("port", port).Error("failed to get external IP for UDP listener")
 		return nil, fmt.Errorf("failed to get external IP: %w", err)
 	}
 
@@ -71,6 +81,10 @@ func ListenPacketContext(ctx context.Context, port int) (*NATPacketListener, err
 	renewal.SetPortChangeCallback(packetListener.updateExternalPort)
 	renewal.Start()
 
+	log.WithFields(logger.Fields{
+		"internalAddr": internalAddr,
+		"externalAddr": externalAddr,
+	}).Debug("NAT UDP packet listener ready")
 	return packetListener, nil
 }
 
