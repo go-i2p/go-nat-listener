@@ -9,6 +9,7 @@ A NAT traversal library for Go that provides standard network interfaces with au
 - **Port Renewal**: Automatically renews port mappings to maintain connectivity
 - **TCP and UDP Support**: Works with both TCP listeners and UDP packet connections
 - **External Address Discovery**: Provides access to both internal and external network addresses
+- **Structured Logging**: Comprehensive structured logging via `github.com/go-i2p/logger`
 
 ## Installation
 
@@ -329,6 +330,37 @@ for {
 
 - `github.com/huin/goupnp` - UPnP protocol implementation
 - `github.com/jackpal/go-nat-pmp` - NAT-PMP protocol implementation
+- `github.com/go-i2p/logger` - Structured logging
+
+## Logging
+
+This library uses [`github.com/go-i2p/logger`](https://github.com/go-i2p/logger) for structured logging throughout. Logging is controlled entirely via environment variables — no code changes are needed.
+
+### Environment Variables
+
+| Variable | Values | Description |
+|----------|--------|-------------|
+| `DEBUG_I2P` | `debug`, `warn`, `error` | Sets log level (default: off) |
+| `WARNFAIL_I2P` | any non-empty value | Causes all warnings and errors to call `log.Fatal` (developer fast-fail mode) |
+
+### Usage Examples
+
+```bash
+# Run with no logs (default)
+go run main.go
+
+# Run with debug-level logs (shows all NAT discovery steps)
+DEBUG_I2P=debug go run main.go
+
+# Run with only warnings and errors
+DEBUG_I2P=warn go run main.go
+
+# Run tests with logging enabled
+DEBUG_I2P=debug go test ./...
+
+# Developer mode: fail immediately on any warning or error
+WARNFAIL_I2P=true DEBUG_I2P=debug go test ./...
+```
 
 ## License
 
