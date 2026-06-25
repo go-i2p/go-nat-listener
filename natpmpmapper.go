@@ -29,10 +29,10 @@ func NewNATPMPMapper() (*NATPMPMapper, error) {
 	log.WithField("gateway", gateway.String()).Debug("NAT-PMP gateway discovered")
 	client := natpmp.NewClient(gateway)
 
-	// Test connectivity
+	// Test connectivity — treat failure as non-fatal so NAT traversal can still work via other methods
 	_, err = client.GetExternalAddress()
 	if err != nil {
-		log.WithError(err).WithField("gateway", gateway.String()).Error("NAT-PMP connectivity test failed")
+		log.WithError(err).WithField("gateway", gateway.String()).Warning("NAT-PMP connectivity test failed — will attempt fallback")
 		return nil, fmt.Errorf("NAT-PMP connectivity test failed: %w", err)
 	}
 
