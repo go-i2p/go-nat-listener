@@ -1,7 +1,7 @@
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/go-i2p/logger v0.1.60000-0.20260701131042-844a6cd1489b h1:1Lh+hO1QaJNhHMTeDdRKZ+WQbDqjp+/sW0jGH+c9gek=
-github.com/go-i2p/logger v0.1.60000-0.20260701131042-844a6cd1489b/go.mod h1:hImCA+uIhYMZ9A6zyBezgdWJ9L5Nx+eEYCO74epGzts=
+github.com/go-i2p/logger v0.1.60000-0.20260701134448-2648c3b0e040 h1:+a8ZBh5vNWbQE4+bSSVGtDTTMVfKV/rLVyYAaGUp8ME=
+github.com/go-i2p/logger v0.1.60000-0.20260701134448-2648c3b0e040/go.mod h1:hImCA+uIhYMZ9A6zyBezgdWJ9L5Nx+eEYCO74epGzts=
 github.com/huin/goupnp v1.3.0 h1:UvLUlWDNpoUdYzb2TCn+MuTWtcjXKSza2n6CBdQ0xXc=
 github.com/huin/goupnp v1.3.0/go.mod h1:gnGPsThkYa7bFi/KWmEysQRf48l2dvR5bxr2OFckNX8=
 github.com/jackpal/go-nat-pmp v1.0.2 h1:KzKSgb7qkJvOUTqYl9/Hg/me3pWgBmERKrTGD7BdWus=
