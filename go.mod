@@ -3,7 +3,7 @@ module github.com/go-i2p/go-nat-listener
 go 1.26.8
 
 require (
-	github.com/go-i2p/logger v0.1.60000-0.20260701134448-2648c3b0e040
+	github.com/go-i2p/logger v0.1.70000
 	github.com/huin/goupnp v1.3.0
 	github.com/jackpal/go-nat-pmp v1.1.0
 )
