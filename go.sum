@@ -1,5 +1,5 @@
-github.com/go-i2p/logger v0.1.70000 h1:jIlqBJ0PYlzO52yyJKb8JDHFItzjw1eI9dgh4xoTgss=
-github.com/go-i2p/logger v0.1.70000/go.mod h1:EO05RdRNr1CEsVV2mYURSF3eVbnkNLrc+na7D4UPVX4=
+github.com/go-i2p/logger v0.1.70001 h1:t5Nexs02kO6rwzkXQa5YR9wHKYzjVUw2A7e5gNjupgA=
+github.com/go-i2p/logger v0.1.70001/go.mod h1:EO05RdRNr1CEsVV2mYURSF3eVbnkNLrc+na7D4UPVX4=
 github.com/huin/goupnp v1.3.0 h1:UvLUlWDNpoUdYzb2TCn+MuTWtcjXKSza2n6CBdQ0xXc=
 github.com/huin/goupnp v1.3.0/go.mod h1:gnGPsThkYa7bFi/KWmEysQRf48l2dvR5bxr2OFckNX8=
 github.com/jackpal/go-nat-pmp v1.1.0 h1:UInMLPV1VQdP860ggNiz0YxGvJH/bWzxL099y+1EdCs=
